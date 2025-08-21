@@ -3,17 +3,24 @@ from pymongo import MongoClient
 from datetime import datetime
 from bson.objectid import ObjectId
 import re
+import os
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
-client = MongoClient('mongodb://localhost:27017/')
+client = MongoClient('mongodb+srv://ogmoscosoj:KcB4gSO579gBCSzY@conagoparedb.vwmlbqg.mongodb.net/?retryWrites=true&w=majority&appName=conagoparedb')
 db_oficios = client['conagoparedb']
 oficios = db_oficios['oficios']
 parroquias = db_oficios['parroquias']
 users = db_oficios['users_db']
 notifications = db_oficios['notifications']
 
+# Send a ping to confirm a successful connection
+try:
+    client.admin.command('ping')
+    print("Pinged your deployment. You successfully connected to MongoDB!")
+except Exception as e:
+    print(e)
 tipos_asesoria = ['Asesoría Técnica', 'Inspección', 'Consultoría']
 roles_list = ['receiver', 'designer', 'tecnico', 'admin']
 

@@ -274,7 +274,7 @@
                         </div>
                         <div class="modal-body">
                             <form method="POST" style="display:inline;" class="tecnico-form">
-                                <input type="hidden" name="oficio_id" id="edit_oficio_id">
+                                <input type="hidden" name="oficio_id" value="{{ oficio._id }}">
                                 <div class="mb-2">
                                     <select class="form-select form-select-sm" name="tecnico_asignado[]" multiple
                                         required>
@@ -335,13 +335,12 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
-        // Store técnicos list for JavaScript use
         const tecnicos = {{ tecnicos | tojson }};
         console.log(tecnicos);
         
 
         function addTecnicoSelect(selectElement, containerId = null) {
-            if (!selectElement.value) return; // Do nothing if no value is selected
+            if (!selectElement.value) return;
             const container = containerId ?
                 document.getElementById(containerId) :
                 selectElement.closest('.tecnico-container');
@@ -362,7 +361,6 @@
             newInputGroup.appendChild(newSelect);
             newInputGroup.appendChild(removeButton);
             container.appendChild(newInputGroup);
-            // Show remove button for all selects except the first
             const allSelects = container.querySelectorAll('.tecnico-select');
             allSelects.forEach((sel, index) => {
                 const btn = sel.parentElement.querySelector('.remove-tecnico');
@@ -372,7 +370,6 @@
 
         function removeTecnicoSelect(button) {
             button.parentElement.remove();
-            // Update remove buttons visibility
             const container = button.closest('.tecnico-container');
             const allSelects = container.querySelectorAll('.tecnico-select');
             allSelects.forEach((sel, index) => {
@@ -386,19 +383,16 @@
                 const modal = document.getElementById('editModal');
                 modal.querySelector('#edit_oficio_id').value = this.dataset.id;
                 const tecnicoContainer = modal.querySelector('#edit_tecnico_container');
-                // Clear existing select fields except the first
                 const existingSelects = tecnicoContainer.querySelectorAll('.input-group');
                 existingSelects.forEach((group, index) => {
                     if (index > 0) group.remove();
                 });
                 const firstSelect = tecnicoContainer.querySelector('.tecnico-select');
-                firstSelect.value = ''; // Reset first select
+                firstSelect.value = '';
                 const tecnicos = JSON.parse(this.dataset.tecnicoAsignado || '[]');
-                // Populate first select if there's at least one tecnico
                 if (tecnicos.length > 0) {
                     firstSelect.value = tecnicos[0] || '';
                 }
-                // Add additional selects for remaining tecnicos
                 for (let i = 1; i < tecnicos.length; i++) {
                     addTecnicoSelect(firstSelect, 'edit_tecnico_container');
                     const newSelect = tecnicoContainer.querySelectorAll('.tecnico-select')[i];

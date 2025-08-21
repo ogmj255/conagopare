@@ -3,7 +3,6 @@ from pymongo import MongoClient
 from datetime import datetime
 from bson.objectid import ObjectId
 import re
-import os
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
@@ -14,13 +13,12 @@ oficios = db_oficios['oficios']
 parroquias = db_oficios['parroquias']
 users = db_oficios['users_db']
 notifications = db_oficios['notifications']
-
-# Send a ping to confirm a successful connection
 try:
     client.admin.command('ping')
     print("Pinged your deployment. You successfully connected to MongoDB!")
 except Exception as e:
     print(e)
+
 tipos_asesoria = ['Asesoría Técnica', 'Inspección', 'Consultoría']
 roles_list = ['receiver', 'designer', 'tecnico', 'admin']
 
@@ -492,4 +490,4 @@ def admin():
     return render_template('admin.html', oficios=all_oficios, users=users_list, parroquias=parroquias_list, roles=roles_list, tecnicos=tecnicos_list, tipos=tipos_asesoria)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)), debug=True)

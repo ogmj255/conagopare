@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Designación</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Sistema de Gestión de Oficios</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="tab-pendientes" onclick="showPanel('pendientes')"
+                            href="#">Pendientes</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="tab-designados" onclick="showPanel('designados')"
+                            href="#">Designados</a>
+                    </li>
+                    {% if session.role == 'admin' %}
+                    <li class="nav-item">
+                        <a class="nav-link" id="tab-usuarios" onclick="showPanel('usuarios')" href="#">Gestión de
+                            Usuarios</a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle position-relative" href="#" id="notificationDropdown"
+                            role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-bell"></i>
+                            <span class="badge bg-danger notification-badge" id="notificationCount">0</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end notification-dropdown"
+                            aria-labelledby="notificationDropdown">
+                            <li>
+                                <h6 class="dropdown-header">Notificaciones</h6>
+                            </li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <div id="notificationList"></div>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li><button class="dropdown-item text-center" onclick="clearNotifications()">Limpiar
+                                    Notificaciones</button></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item dropdown d-flex align-items-center">
+                        <i class="bi bi-person-circle fs-4 me-2 text-white"></i>
+                        <a class="nav-link dropdown-toggle fw-semibold text-white" href="#" id="navbarDropdown"
+                            role="button" data-bs-toggle="dropdown" aria-expanded="false" style="padding-left:0;">
+                            {{ session.user }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                            <li><a class="dropdown-item" href="#" data-bs-toggle="modal"
+                                    data-bs-target="#changePasswordModal">Cambiar Contraseña</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">Cerrar Sesión</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible show"
+            role="alert">
+            <span class="alert-icon">{{ '✓' if category == 'success' else '⚠' }}</span>
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div class="main-container">
+            <div id="panel-pendientes" class="fade-panel active">
+                <div class="card">
+                    <div class="card-header">Pendientes</div>
+                    <div class="card-body">
+                        {% if pendientes %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Número Oficio</th>
+                                        <th>Parroquia</th>
+                                        <th>Cantón</th>
+                                        <th>Detalle</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for oficio in pendientes %}
+                                    <tr>
+                                        <td>{{ oficio.id_secuencial }}</td>
+                                        <td>{{ oficio.numero_oficio }}</td>
+                                        <td>{{ oficio.gad_parroquial }}</td>
+                                        <td>{{ oficio.canton }}</td>
+                                        <td>{{ oficio.detalle }}</td>
+                                        <td>
+                                            <form method="POST" style="display:inline;" class="tecnico-form">
+                                                <input type="hidden" name="oficio_id" value="{{ oficio._id }}">
+                                                <div class="mb-2 tecnico-container">
+                                                    <div class="input-group">
+                                                        <select class="form-select form-select-sm tecnico-select"
+                                                            name="tecnico_asignado[]" onchange="addTecnicoSelect(this)">
+                                                            <option value="" selected disabled>Seleccione Técnico
+                                                            </option>
+                                                            {% for tecnico in tecnicos %}
+                                                            <option value="{{ tecnico }}">{{ tecnico }}</option>
+                                                            {% endfor %}
+                                                        </select>
+                                                        <button type="button"
+                                                            class="btn btn-danger btn-sm remove-tecnico d-none"
+                                                            onclick="removeTecnicoSelect(this)">X</button>
+                                                    </div>
+                                                </div>
+                                                <div class="mb-2">
+                                                    <select class="form-select form-select-sm" name="tipo_asesoria"
+                                                        required>
+                                                        <option value="Ninguno">Tipo Asesoría</option>
+                                                        {% for tipo in tipos %}
+                                                        <option value="{{ tipo }}">{{ tipo }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <button type="submit" class="btn btn-success btn-sm">Designar</button>
+                                            </form>
+                                            <button type="button" class="btn btn-primary btn-sm edit-btn"
+                                                data-bs-toggle="modal" data-bs-target="#editModal"
+                                                data-id="{{ oficio._id }}"
+                                                data-tecnico-asignado="{{ oficio.tecnico_asignado | tojson }}"
+                                                data-tipo-asesoria="{{ oficio.tipo_asesoria }}">
+                                                Editar
+                                            </button>
+                                            <form method="POST" style="display:inline;">
+                                                <input type="hidden" name="oficio_id" value="{{ oficio._id }}">
+                                                <button type="submit" class="btn btn-danger btn-sm" name="delete_oficio"
+                                                    onclick="return confirm('¿Está seguro de eliminar este registro?')">Eliminar</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted">Sin tareas pendientes.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div id="panel-designados" class="fade-panel">
+                <div class="card">
+                    <div class="card-header">Designados</div>
+                    <div class="card-body">
+                        {% if designados %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Número Oficio</th>
+                                        <th>Detalle</th>
+                                        <th>Técnico</th>
+                                        <th>Tipo Asesoría</th>
+                                        <th>Fecha Designación</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for oficio in designados %}
+                                    <tr>
+                                        <td>{{ oficio.id_secuencial }}</td>
+                                        <td>{{ oficio.numero_oficio }}</td>
+                                        <td>{{ oficio.detalle }}</td>
+                                        <td>{{ oficio.tecnico_asignado | join(', ') }}</td>
+                                        <td>{{ oficio.tipo_asesoria }}</td>
+                                        <td>{{ oficio.fecha_designacion_formatted }}</td>
+                                        <td>
+                                            <button type="button" class="btn btn-primary btn-sm edit-btn"
+                                                data-bs-toggle="modal" data-bs-target="#editModal"
+                                                data-id="{{ oficio._id }}"
+                                                data-tecnico-asignado="{{ oficio.tecnico_asignado | tojson }}"
+                                                data-tipo-asesoria="{{ oficio.tipo_asesoria }}">
+                                                Editar
+                                            </button>
+                                            <form method="POST" style="display:inline;">
+                                                <input type="hidden" name="oficio_id" value="{{ oficio._id }}">
+                                                <button type="submit" class="btn btn-danger btn-sm" name="delete_oficio"
+                                                    onclick="return confirm('¿Está seguro de eliminar este registro?')">Eliminar</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted">Sin tareas designadas.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {% if session.role == 'admin' %}
+            <div id="panel-usuarios" class="fade-panel">
+                <div class="card">
+                    <div class="card-header">Gestión de Usuarios</div>
+                    <div class="card-body">
+                        <h5 class="card-title">Crear Usuario</h5>
+                        <form method="POST" class="mb-4">
+                            <div class="mb-3">
+                                <input type="text" class="form-control" name="new_username"
+                                    placeholder="Nombre de usuario" required>
+                            </div>
+                            <div class="mb-3">
+                                <input type="password" class="form-control" name="new_password" placeholder="Contraseña"
+                                    required>
+                            </div>
+                            <button type="submit" class="btn btn-success" name="create_user">Crear</button>
+                        </form>
+
+                        <h5 class="card-title">Editar Usuarios</h5>
+                        {% for user in users %}
+                        <form method="POST" class="mb-3">
+                            <input type="hidden" name="user_id" value="{{ user._id }}">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <input type="text" class="form-control" name="edit_username"
+                                        value="{{ user.username }}" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <input type="password" class="form-control" name="edit_password"
+                                        placeholder="Nueva contraseña (opcional)">
+                                </div>
+                                <div class="col-md-4">
+                                    <button type="submit" class="btn btn-primary" name="edit_user">Actualizar</button>
+                                </div>
+                            </div>
+                        </form>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Edit Modal -->
+            <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="editModalLabel">Editar Registro</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form method="POST" style="display:inline;" class="tecnico-form">
+                                <input type="hidden" name="oficio_id" id="edit_oficio_id">
+                                <div class="mb-2">
+                                    <select class="form-select form-select-sm" name="tecnico_asignado[]" multiple
+                                        required>
+                                        {% for tecnico in tecnicos %}
+                                        <option value="{{ tecnico }}">{{ tecnico }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted">Ctrl+Click para seleccionar varios</small>
+                                </div>
+                                <div class="mb-2">
+                                    <select class="form-select form-select-sm" name="tipo_asesoria" required>
+                                        <option value="Ninguno">Tipo Asesoría</option>
+                                        {% for tipo in tipos %}
+                                        <option value="{{ tipo }}">{{ tipo }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-success btn-sm">Designar</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel"
+                aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="changePasswordModalLabel">Cambiar Contraseña</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form method="POST" action="{{ url_for('change_password') }}">
+                                <div class="mb-3">
+                                    <label for="old_password" class="form-label">Contraseña Anterior</label>
+                                    <input type="password" class="form-control" id="old_password" name="old_password"
+                                        required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="new_password" class="form-label">Nueva Contraseña</label>
+                                    <input type="password" class="form-control" id="new_password" name="new_password"
+                                        required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="confirm_password" class="form-label">Confirmar Nueva Contraseña</label>
+                                    <input type="password" class="form-control" id="confirm_password"
+                                        name="confirm_password" required>
+                                </div>
+                                <button type="submit" class="btn btn-success">Guardar</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // Store técnicos list for JavaScript use
+        const tecnicos = {{ tecnicos | tojson }};
+        console.log(tecnicos);
+        
+
+        function addTecnicoSelect(selectElement, containerId = null) {
+            if (!selectElement.value) return; // Do nothing if no value is selected
+            const container = containerId ?
+                document.getElementById(containerId) :
+                selectElement.closest('.tecnico-container');
+            const form = selectElement.closest('form');
+            const newInputGroup = document.createElement('div');
+            newInputGroup.className = 'input-group mt-2';
+            const newSelect = document.createElement('select');
+            newSelect.className = 'form-select form-select-sm tecnico-select';
+            newSelect.name = containerId ? 'edit_tecnico_asignado[]' : 'tecnico_asignado[]';
+            newSelect.innerHTML = '<option value="" selected disabled>Seleccione Técnico</option>' +
+                tecnicos.map(tecnico => `<option value="${tecnico}">${tecnico}</option>`).join('');
+            newSelect.onchange = function () { addTecnicoSelect(this, containerId); };
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'btn btn-danger btn-sm remove-tecnico';
+            removeButton.textContent = 'X';
+            removeButton.onclick = function () { removeTecnicoSelect(this); };
+            newInputGroup.appendChild(newSelect);
+            newInputGroup.appendChild(removeButton);
+            container.appendChild(newInputGroup);
+            // Show remove button for all selects except the first
+            const allSelects = container.querySelectorAll('.tecnico-select');
+            allSelects.forEach((sel, index) => {
+                const btn = sel.parentElement.querySelector('.remove-tecnico');
+                if (btn) btn.classList.toggle('d-none', index === 0);
+            });
+        }
+
+        function removeTecnicoSelect(button) {
+            button.parentElement.remove();
+            // Update remove buttons visibility
+            const container = button.closest('.tecnico-container');
+            const allSelects = container.querySelectorAll('.tecnico-select');
+            allSelects.forEach((sel, index) => {
+                const btn = sel.parentElement.querySelector('.remove-tecnico');
+                if (btn) btn.classList.toggle('d-none', index === 0);
+            });
+        }
+
+        document.querySelectorAll('.edit-btn').forEach(button => {
+            button.addEventListener('click', function () {
+                const modal = document.getElementById('editModal');
+                modal.querySelector('#edit_oficio_id').value = this.dataset.id;
+                const tecnicoContainer = modal.querySelector('#edit_tecnico_container');
+                // Clear existing select fields except the first
+                const existingSelects = tecnicoContainer.querySelectorAll('.input-group');
+                existingSelects.forEach((group, index) => {
+                    if (index > 0) group.remove();
+                });
+                const firstSelect = tecnicoContainer.querySelector('.tecnico-select');
+                firstSelect.value = ''; // Reset first select
+                const tecnicos = JSON.parse(this.dataset.tecnicoAsignado || '[]');
+                // Populate first select if there's at least one tecnico
+                if (tecnicos.length > 0) {
+                    firstSelect.value = tecnicos[0] || '';
+                }
+                // Add additional selects for remaining tecnicos
+                for (let i = 1; i < tecnicos.length; i++) {
+                    addTecnicoSelect(firstSelect, 'edit_tecnico_container');
+                    const newSelect = tecnicoContainer.querySelectorAll('.tecnico-select')[i];
+                    newSelect.value = tecnicos[i];
+                }
+                modal.querySelector('#edit_tipo_asesoria').value = this.dataset.tipoAsesoria || 'Ninguno';
+            });
+        });
+    </script>
+</body>
+
+</html>

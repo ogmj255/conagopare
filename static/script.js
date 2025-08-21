@@ -8,11 +8,11 @@ function updateCanton() {
             },
             body: JSON.stringify({ parroquia: parroquia })
         })
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('canton').value = data.canton;
-        })
-        .catch(error => console.error('Error:', error));
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('canton').value = data.canton;
+            })
+            .catch(error => console.error('Error:', error));
     } else {
         document.getElementById('canton').value = '';
     }
@@ -28,11 +28,11 @@ function updateCantonEdit() {
             },
             body: JSON.stringify({ parroquia: parroquia })
         })
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('edit_canton').value = data.canton;
-        })
-        .catch(error => console.error('Error:', error));
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('edit_canton').value = data.canton;
+            })
+            .catch(error => console.error('Error:', error));
     } else {
         document.getElementById('edit_canton').value = '';
     }
@@ -83,13 +83,13 @@ document.addEventListener('DOMContentLoaded', () => {
 function showPanel(panel) {
     const panels = document.querySelectorAll('.fade-panel');
     const tabs = document.querySelectorAll('.nav-link');
-    
+
     panels.forEach(p => p.classList.remove('active'));
     tabs.forEach(t => t.classList.remove('active'));
-    
+
     const panelElement = document.getElementById(`panel-${panel}`);
     const tabElement = document.getElementById(`tab-${panel}`);
-    
+
     if (panelElement && tabElement) {
         panelElement.classList.add('active');
         tabElement.classList.add('active');
@@ -183,7 +183,7 @@ async function updateCantonEdit() {
 }
 
 document.querySelectorAll('.edit-btn').forEach(button => {
-    button.addEventListener('click', function() {
+    button.addEventListener('click', function () {
         const modal = document.getElementById('editModal');
         modal.querySelector('#edit_oficio_id').value = this.dataset.id;
         modal.querySelector('#edit_fecha_enviado').value = this.dataset.fechaEnviado || '';
@@ -243,16 +243,16 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 document.querySelectorAll('.edit-btn').forEach(button => {
-    button.addEventListener('click', function() {
+    button.addEventListener('click', function () {
         const modal = document.getElementById('editModal');
         modal.querySelector('#edit_oficio_id').value = this.dataset.id;
-        // Seleccionar técnicos asignados
         const tecnicosAsignados = JSON.parse(this.dataset.tecnicoAsignado || '[]');
         const select = modal.querySelector('#edit_tecnico_asignado');
         Array.from(select.options).forEach(option => {
             option.selected = tecnicosAsignados.includes(option.value);
         });
-        // Seleccionar tipo de asesoría
+
         modal.querySelector('#edit_tipo_asesoria').value = this.dataset.tipoAsesoria || 'Ninguno';
     });
 });
+

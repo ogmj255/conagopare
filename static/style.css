@@ -6,6 +6,35 @@ body {
     line-height: 1.6;
     margin: 0;
 }
+.login-card {
+    max-width: 400px;
+    width: 100%;
+    border-radius: 18px;
+    box-shadow: 0 6px 24px rgba(30, 64, 175, 0.1), 0 2px 8px rgba(0, 0, 0, 0.08);
+    background: #ffffff;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.login-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 10px 32px rgba(30, 64, 175, 0.15), 0 3px 12px rgba(0, 0, 0, 0.1);
+}
+
+.login-card .logo {
+    max-width: 220px;
+}
+
+.login-card .card-header {
+    background: transparent;
+    border-bottom: none;
+    padding: 0;
+}
+
+.login-card .card-title {
+    color: #1e3a8a;
+    font-weight: 700;
+    font-size: 1.5rem;
+}
 
 .container {
     max-width: 1400px;
@@ -320,4 +349,68 @@ body {
 .table-responsive {
     border-radius: 10px;
     overflow-x: auto;
+}
+
+.sidebar {
+    background-color: #1d2e5d;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 250px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    padding-top: 1rem;
+}
+
+.sidebar .navbar-brand {
+    color: #ffffff;
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.sidebar .nav-link {
+    color: #ffffff !important;
+    font-weight: 500;
+    font-size: 1.1rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.sidebar .nav-link:hover,
+.sidebar .nav-link.active {
+    background-color: #2a61b9;
+    color: #ffffff !important;
+}
+
+.sidebar .nav-item.mt-4 .nav-link {
+    color: #f87171 !important;
+}
+
+.sidebar .nav-item.mt-4 .nav-link:hover {
+    background-color: #dc2626;
+}
+
+.main-content {
+    margin-left: 250px;
+    padding: 2rem;
+    min-height: 100vh;
+}
+
+.card-header.bg-primary {
+    background: #1e3a8a !important;
+    color: #ffffff;
+}
+
+.card-header.bg-success {
+    background: #1e3a8a !important;
+    color: #ffffff;
+}
+
+.card-header.bg-info {
+    background: #1e3a8a !important;
+    color: #ffffff;
 }

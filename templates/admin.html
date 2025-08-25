@@ -1,65 +1,70 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel Administrativo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
-    <nav class="navbar navbar-expand-lg">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="#">Sistema de Gestión de Oficios</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" id="tab-oficios" onclick="showPanel('oficios')" href="#">Resumen de Oficios</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" id="tab-usuarios" onclick="showPanel('usuarios')" href="#">Gestión de Usuarios</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" id="tab-parroquias" onclick="showPanel('parroquias')" href="#">Gestión de Parroquias</a>
-                    </li>
-                </ul>
-                <ul class="navbar-nav">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            {{ session.user }}
+
+<body class="admin">
+    <div class="container-fluid">
+        <div class="row">
+            <nav class="col-lg-2 col-md-3 d-md-block sidebar py-4">
+                <div class="navbar-brand mb-4 text-center">Conagopare Admin</div>
+                <ul class="nav flex-column">
+                    <li class="nav-item mb-2">
+                        <a class="nav-link active" href="#" onclick="showSection('oficios')">
+                            <i class="bi bi-archive me-2"></i>Resumen de Oficios
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal">Cambiar Contraseña</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">Cerrar Sesión</a></li>
-                        </ul>
+                    </li>
+                    <li class="nav-item mb-2">
+                        <a class="nav-link" href="#" onclick="showSection('usuarios')">
+                            <i class="bi bi-people me-2"></i>Gestión de Usuarios
+                        </a>
+                    </li>
+                    <li class="nav-item mb-2">
+                        <a class="nav-link" href="#" onclick="showSection('tipos_asesoria')">
+                            <i class="bi bi-list-check me-2"></i>Gestión de Tipos de Asesoría
+                        </a>
+                    </li>
+                    <li class="nav-item mb-2">
+                        <a class="nav-link" href="#" onclick="showSection('parroquias')">
+                            <i class="bi bi-geo-alt me-2"></i>Gestión de Parroquias
+                        </a>
+                    </li>
+                    <li class="nav-item mt-4">
+                        <a class="nav-link" href="{{ url_for('logout') }}">
+                            <i class="bi bi-box-arrow-right me-2"></i>Cerrar Sesión
+                        </a>
                     </li>
                 </ul>
-            </div>
-        </div>
-    </nav>
-
-    <div class="container">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible show" role="alert">
+            </nav>
+            <main class="col-lg-10 col-md-9 ms-sm-auto main-content">
+                <div class="container-fluid">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show"
+                        role="alert">
                         {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+                    {% endfor %}
+                    {% endif %}
+                    {% endwith %}
 
-        <div class="main-container">
-            <div id="panel-oficios" class="fade-panel active">
-                <div class="card">
-                    <div class="card-header">Resumen de Oficios</div>
-                    <div class="card-body">
-                        {% if oficios %}
+                    <div id="section-oficios" class="card card-section active">
+                        <div class="card-header bg-primary text-white">
+                            <i class="bi bi-archive me-2"></i>Resumen de Oficios
+                        </div>
+                        <div class="card-body">
+                            {% if oficios %}
                             <div class="table-responsive">
-                                <table class="table table-hover">
+                                <table class="table table-hover table-sm align-middle">
                                     <thead>
                                         <tr>
                                             <th>ID</th>
@@ -75,203 +80,321 @@
                                     </thead>
                                     <tbody>
                                         {% for oficio in oficios %}
-                                            <tr>
-                                                <td>{{ oficio.id_secuencial }}</td>
-                                                <td>{{ oficio.numero_oficio }}</td>
-                                                <td>{{ oficio.estado }}</td>
-                                                <td>{{ oficio.tecnico_asignado or 'Pendiente' }}</td>
-                                                <td>{{ oficio.sub_estado or 'N/A' }}</td>
-                                                <td>{{ oficio.fecha_recibido_formatted }}</td>
-                                                <td>{{ oficio.fecha_enviado_formatted }}</td>
-                                                <td>{{ oficio.fecha_designacion_formatted or 'N/A' }}</td>
-                                                <td>
-                                                    <button type="button" class="btn btn-primary btn-sm edit-btn" data-bs-toggle="modal" data-bs-target="#editModal" data-id="{{ oficio._id }}" data-fecha-enviado="{{ oficio.fecha_enviado }}" data-numero-oficio="{{ oficio.numero_oficio }}" data-gad-parroquial="{{ oficio.gad_parroquial }}" data-canton="{{ oficio.canton }}" data-detalle="{{ oficio.detalle }}" data-tecnico-asignado="{{ oficio.tecnico_asignado }}" data-tipo-asesoria="{{ oficio.tipo_asesoria }}">
-                                                        Editar
-                                                    </button>
-                                                    <form method="POST" style="display:inline;">
-                                                        <input type="hidden" name="oficio_id" value="{{ oficio._id }}">
-                                                        <button type="submit" class="btn btn-danger btn-sm" name="delete_oficio" onclick="return confirm('¿Está seguro de eliminar este registro?')">Eliminar</button>
-                                                    </form>
-                                                </td>
-                                            </tr>
+                                        <tr>
+                                            <td>{{ oficio.id_secuencial }}</td>
+                                            <td>{{ oficio.numero_oficio }}</td>
+                                            <td>{{ oficio.estado }}</td>
+                                            <td>
+                                                {% if oficio.assignments %}
+                                                {% for a in oficio.assignments %}
+                                                {{ a.tecnico }}{% if not loop.last %}, {% endif %}
+                                                {% endfor %}
+                                                {% else %}
+                                                Pendiente
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ oficio.sub_estado or 'N/A' }}</td>
+                                            <td>{{ oficio.fecha_recibido_formatted }}</td>
+                                            <td>{{ oficio.fecha_enviado_formatted }}</td>
+                                            <td>{{ oficio.fecha_designacion_formatted or 'N/A' }}</td>
+                                            <td>
+                                                <button type="button" class="btn btn-primary btn-sm edit-btn"
+                                                    data-bs-toggle="modal" data-bs-target="#editModal"
+                                                    data-id="{{ oficio._id }}"
+                                                    data-fecha-enviado="{{ oficio.fecha_enviado }}"
+                                                    data-numero-oficio="{{ oficio.numero_oficio }}"
+                                                    data-gad-parroquial="{{ oficio.gad_parroquial }}"
+                                                    data-canton="{{ oficio.canton }}"
+                                                    data-detalle="{{ oficio.detalle }}"
+                                                    data-assignments="{{ oficio.assignments | tojson }}">
+                                                    Editar
+                                                </button>
+                                                <form method="POST" style="display:inline;">
+                                                    <input type="hidden" name="oficio_id" value="{{ oficio._id }}">
+                                                    <button type="submit" class="btn btn-danger btn-sm"
+                                                        name="delete_oficio"
+                                                        onclick="return confirm('¿Está seguro de eliminar este registro?')">Eliminar</button>
+                                                </form>
+                                            </td>
+                                        </tr>
                                         {% endfor %}
                                     </tbody>
                                 </table>
                             </div>
-                        {% else %}
+                            {% else %}
                             <p class="text-muted">Sin oficios registrados.</p>
-                        {% endif %}
+                            {% endif %}
+                        </div>
                     </div>
-                </div>
-            </div>
 
-            <div id="panel-usuarios" class="fade-panel">
-                <div class="card">
-                    <div class="card-header">Gestión de Usuarios</div>
-                    <div class="card-body">
-                        <h5 class="card-title">Crear Usuario</h5>
-                        <form method="POST" class="mb-4">
-                            <div class="mb-3">
-                                <input type="text" class="form-control" name="new_username" placeholder="Nombre de usuario" required>
-                            </div>
-                            <div class="mb-3">
-                                <input type="password" class="form-control" name="new_password" placeholder="Contraseña" required>
-                            </div>
-                            <div class="mb-3">
-                                <select class="form-select" name="role" required>
-                                    <option value="">Seleccione Rol</option>
-                                    {% for role in roles %}
-                                        <option value="{{ role }}">{{ role }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-success" name="create_user">Crear</button>
-                        </form>
-
-                        <h5 class="card-title">Editar Usuarios</h5>
-                        {% for user in users %}
-                            <form method="POST" class="mb-3">
-                                <input type="hidden" name="user_id" value="{{ user._id }}">
-                                <div class="row g-3">
-                                    <div class="col-md-3">
-                                        <input type="text" class="form-control" name="edit_username" value="{{ user.username }}" required>
+                    <div id="section-usuarios" class="card card-section d-none">
+                        <div class="card-header bg-success text-white">
+                            <i class="bi bi-people me-2"></i>Gestión de Usuarios
+                        </div>
+                        <div class="card-body">
+                            <h5 class="card-title">Crear Usuario</h5>
+                            <form method="POST" class="mb-4">
+                                <div class="row g-3 mb-2">
+                                    <div class="col-md-6">
+                                        <input type="text" class="form-control" name="nombre" placeholder="Nombre"
+                                            required>
                                     </div>
-                                    <div class="col-md-3">
-                                        <input type="password" class="form-control" name="edit_password" placeholder="Nueva contraseña (opcional)">
+                                    <div class="col-md-6">
+                                        <input type="text" class="form-control" name="apellido" placeholder="Apellido"
+                                            required>
                                     </div>
-                                    <div class="col-md-3">
-                                        <select class="form-select" name="edit_role" required>
+                                </div>
+                                <div class="row g-3 mb-2">
+                                    <div class="col-md-6">
+                                        <input type="text" class="form-control" name="username"
+                                            placeholder="Nombre de usuario" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <input type="password" class="form-control" name="password"
+                                            placeholder="Contraseña" required>
+                                    </div>
+                                </div>
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-6">
+                                        <select class="form-select" name="role" required>
+                                            <option value="">Seleccione Rol</option>
                                             {% for role in roles %}
-                                                <option value="{{ role }}" {% if user.role == role %}selected{% endif %}>{{ role }}</option>
+                                            <option value="{{ role }}">{{ role }}</option>
                                             {% endfor %}
                                         </select>
                                     </div>
-                                    <div class="col-md-3">
-                                        <button type="submit" class="btn btn-primary" name="edit_user">Actualizar</button>
+                                    <div class="col-md-6">
+                                        <button type="submit" class="btn btn-success w-100" name="create_user">
+                                            <i class="bi bi-person-plus"></i> Crear
+                                        </button>
                                     </div>
                                 </div>
                             </form>
-                        {% endfor %}
+
+                            <h5 class="card-title mt-4">Editar Usuarios</h5>
+                            <div class="table-responsive">
+                                <table class="table table-bordered align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Nombre</th>
+                                            <th>Apellido</th>
+                                            <th>Usuario</th>
+                                            <th>Rol</th>
+                                            <th>Contraseña</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for user in users %}
+                                        <form method="POST">
+                                            <input type="hidden" name="user_id" value="{{ user._id }}">
+                                            <tr>
+                                                <td>
+                                                    <input type="text" class="form-control" name="nombre"
+                                                        value="{{ user.nombre or '' }}" placeholder="Nombre" required>
+                                                </td>
+                                                <td>
+                                                    <input type="text" class="form-control" name="apellido"
+                                                        value="{{ user.apellido or '' }}" placeholder="Apellido"
+                                                        required>
+                                                </td>
+                                                <td>
+                                                    <input type="text" class="form-control" name="username"
+                                                        value="{{ user.username or '' }}" required
+                                                        placeholder="Username">
+                                                </td>
+                                                <td>
+                                                    <select class="form-select" name="role" required>
+                                                        {% for role in roles %}
+                                                        <option value="{{ role }}" {% if user.role==role %}selected{%
+                                                            endif %}>{{ role }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </td>
+                                                <td>
+                                                    <input type="password" class="form-control" name="password"
+                                                        placeholder="Nueva contraseña (opcional)">
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td colspan="5" class="text-center pb-3">
+                                                    <button type="submit" class="btn btn-primary btn-sm me-2"
+                                                        name="edit_user">
+                                                        <i class="bi bi-save"></i> Actualizar
+                                                    </button>
+                                                    <button type="submit" class="btn btn-danger btn-sm"
+                                                        name="delete_user"
+                                                        onclick="return confirm('¿Está seguro de eliminar este usuario?')">
+                                                        <i class="bi bi-trash"></i> Eliminar
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </form>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
 
-            <div id="panel-parroquias" class="fade-panel">
-                <div class="card">
-                    <div class="card-header">Gestión de Parroquias</div>
-                    <div class="card-body">
-                        <h5 class="card-title">Añadir Parroquia</h5>
-                        <form method="POST" class="mb-4">
-                            <div class="mb-3">
-                                <input type="text" class="form-control" name="parroquia" placeholder="Parroquia" required>
-                            </div>
-                            <div class="mb-3">
-                                <input type="text" class="form-control" name="canton" placeholder="Cantón" required>
-                            </div>
-                            <button type="submit" class="btn btn-success" name="add_parroquia">Añadir</button>
-                        </form>
+                    <div id="section-tipos_asesoria" class="card card-section d-none">
+                        <div class="card-header bg-info text-white">
+                            <i class="bi bi-list-check me-2"></i>Gestión de Tipos de Asesoría
+                        </div>
+                        <div class="card-body">
+                            <h5 class="card-title">Añadir Tipo de Asesoría</h5>
+                            <form method="POST" class="mb-4">
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" name="nombre"
+                                        placeholder="Nombre del tipo de asesoría" required>
+                                </div>
+                                <button type="submit" class="btn btn-success" name="add_tipo_asesoria">Añadir</button>
+                            </form>
 
-                        <h5 class="card-title">Editar Parroquias</h5>
-                        {% for p in parroquias %}
+                            <h5 class="card-title">Tipos de Asesoría Existentes</h5>
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for tipo in tipos_asesoria %}
+                                    <tr>
+                                        <form method="POST" id="form-tipo-{{ tipo._id }}">
+                                            <input type="hidden" name="tipo_id" value="{{ tipo._id }}">
+                                            <td>
+                                                <input type="text" class="form-control" name="edit_nombre"
+                                                    value="{{ tipo.nombre }}" id="input-tipo-{{ tipo._id }}" readonly
+                                                    required>
+                                            </td>
+                                            <td>
+                                                <button type="button" class="btn btn-primary btn-sm me-2"
+                                                    onclick="enableEdit('{{ tipo._id }}')">
+                                                    <i class="bi bi-pencil"></i> Editar
+                                                </button>
+                                                <button type="submit" class="btn btn-success btn-sm d-none"
+                                                    name="edit_tipo_asesoria" id="save-tipo-{{ tipo._id }}">
+                                                    <i class="bi bi-save"></i> Guardar
+                                                </button>
+                                                <button type="submit" class="btn btn-danger btn-sm"
+                                                    name="delete_tipo_asesoria"
+                                                    onclick="return confirm('¿Está seguro de eliminar este tipo de asesoría?')">
+                                                    <i class="bi bi-trash"></i> Eliminar
+                                                </button>
+                                            </td>
+                                        </form>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="section-parroquias" class="card card-section d-none">
+                        <div class="card-header bg-info text-white">
+                            <i class="bi bi-geo-alt me-2"></i>Gestión de Parroquias
+                        </div>
+                        <div class="card-body">
+                            <h5 class="card-title">Añadir Parroquia</h5>
+                            <form method="POST" class="mb-4">
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" name="parroquia" placeholder="Parroquia"
+                                        required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" name="canton" placeholder="Cantón" required>
+                                </div>
+                                <button type="submit" class="btn btn-success" name="add_parroquia">Añadir</button>
+                            </form>
+
+                            <h5 class="card-title">Editar Parroquias</h5>
+                            {% for p in parroquias %}
                             <form method="POST" class="mb-3">
                                 <input type="hidden" name="parroquia_id" value="{{ p._id }}">
                                 <div class="row g-3">
                                     <div class="col-md-4">
-                                        <input type="text" class="form-control" name="edit_parroquia" value="{{ p.parroquia }}" required>
+                                        <input type="text" class="form-control" name="edit_parroquia"
+                                            value="{{ p.parroquia }}" required>
                                     </div>
                                     <div class="col-md-4">
-                                        <input type="text" class="form-control" name="edit_canton" value="{{ p.canton }}" required>
+                                        <input type="text" class="form-control" name="edit_canton"
+                                            value="{{ p.canton }}" required>
                                     </div>
-                                    <div class="col-md-4">
-                                        <button type="submit" class="btn btn-primary" name="edit_parroquia">Actualizar</button>
+                                    <div class="col-md-2">
+                                        <button type="submit" class="btn btn-primary w-100"
+                                            name="edit_parroquia">
+                                            <i class="bi bi-save"></i> Actualizar
+                                        </button>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="button" class="btn btn-danger w-100" onclick="return confirm('¿Está seguro de eliminar esta parroquia?')">
+                                            <i class="bi bi-trash"></i> Eliminar
+                                        </button>
                                     </div>
                                 </div>
                             </form>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-            <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="editModalLabel">Editar Registro</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <form method="POST">
-                                <input type="hidden" name="oficio_id" id="edit_oficio_id">
-                                <div class="mb-3">
-                                    <label for="edit_fecha_enviado" class="form-label">Fecha Enviado</label>
-                                    <input type="date" class="form-control" id="edit_fecha_enviado" name="edit_fecha_enviado" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="edit_numero_oficio" class="form-label">Número de Oficio</label>
-                                    <input type="text" class="form-control" id="edit_numero_oficio" name="edit_numero_oficio" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="edit_gad_parroquial" class="form-label">GAD Parroquial</label>
-                                    <select class="form-select" id="edit_gad_parroquial" name="edit_gad_parroquial" onchange="updateCantonEdit()" required>
-                                        <option value="">Seleccione...</option>
-                                        {% for parroquia in parroquias %}
-                                            <option value="{{ parroquia.parroquia }}">{{ parroquia.parroquia }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="edit_canton" class="form-label">Cantón</label>
-                                    <input type="text" class="form-control" id="edit_canton" name="edit_canton" readonly>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="edit_detalle" class="form-label">Detalle</label>
-                                    <textarea class="form-control" id="edit_detalle" name="edit_detalle" rows="4"></textarea>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="edit_tecnico_asignado" class="form-label">Técnico Asignado</label>
-                                    <select class="form-select" id="edit_tecnico_asignado" name="edit_tecnico_asignado">
-                                        <option value="Ninguno">Ninguno</option>
-                                        {% for tecnico in tecnicos %}
-                                            <option value="{{ tecnico }}">{{ tecnico }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="edit_tipo_asesoria" class="form-label">Tipo de Asesoría</label>
-                                    <select class="form-select" id="edit_tipo_asesoria" name="edit_tipo_asesoria">
-                                        <option value="Ninguno">Ninguno</option>
-                                        {% for tipo in tipos %}
-                                            <option value="{{ tipo }}">{{ tipo }}</option>
-                                        {% endfor %}
-                                                                        </select>
-                                </div>
-                                <button type="submit" class="btn btn-success" name="edit_oficio">Guardar</button>
-                            </form>
+                            {% endfor %}
                         </div>
                     </div>
                 </div>
-            </div>
-            <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel" aria-hidden="true">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="changePasswordModalLabel">Cambiar Contraseña</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </main>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editModalLabel">Editar Oficio</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST" id="editForm">
+                        <input type="hidden" name="oficio_id" id="edit-id">
+                        <div class="mb-3">
+                            <label for="edit-fecha-enviado" class="form-label">Fecha Enviado</label>
+                            <input type="date" class="form-control" name="fecha_enviado" id="edit-fecha-enviado"
+                                required>
                         </div>
-                        <div class="modal-body">
-                            <form method="POST" action="{{ url_for('change_password') }}">
-                                <div class="mb-3">
-                                    <label for="new_password" class="form-label">Nueva Contraseña</label>
-                                    <input type="password" class="form-control" id="new_password" name="new_password" required>
-                                </div>
-                                <button type="submit" class="btn btn-success">Guardar</button>
-                            </form>
+                        <div class="mb-3">
+                            <label for="edit-numero-oficio" class="form-label">Número de Oficio</label>
+                            <input type="text" class="form-control" name="numero_oficio" id="edit-numero-oficio"
+                                required>
                         </div>
-                    </div>
+                        <div class="mb-3">
+                            <label for="edit-gad-parroquial" class="form-label">GAD Parroquial</label>
+                            <select class="form-select" name="gad_parroquial" id="edit-gad-parroquial" required>
+                                <option value="">Seleccione GAD Parroquial</option>
+                                {% for p in parroquias %}
+                                <option value="{{ p.parroquia }}">{{ p.parroquia }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-canton" class="form-label">Cantón</label>
+                            <input type="text" class="form-control" name="canton" id="edit-canton" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-detalle" class="form-label">Detalle</label>
+                            <textarea class="form-control" name="detalle" id="edit-detalle" rows="4"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Asignaciones</label>
+                            <div id="assignments-container">
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="addAssignment()">Añadir
+                                Asignación</button>
+                        </div>
+                        <button type="submit" class="btn btn-primary" name="edit_oficio">Actualizar</button>
+                    </form>
                 </div>
             </div>
         </div>
     </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
+
 </html>

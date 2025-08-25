@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,24 +8,27 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
-
 </head>
+
 <body>
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">Sistema de Gestión de Oficios</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link active" id="tab-registro" onclick="showPanel('registro')" href="#">Registrar Oficio</a>
+                        <a class="nav-link active" id="tab-registro" onclick="showPanel('registro')" href="#">Registrar
+                            Oficio</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" id="tab-historial" onclick="showPanel('historial')" href="#">Historial de Registros</a>
+                        <a class="nav-link" id="tab-historial" onclick="showPanel('historial')" href="#">Historial de
+                            Registros</a>
                     </li>
-                    
+
                 </ul>
                 <ul class="navbar-nav">
                     <li class="nav-item dropdown d-flex align-items-center">
@@ -46,15 +50,14 @@
 
     <div class="container">
         {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible show" role="alert">
-                        <span class="alert-icon">{{ '✓' if category == 'success' else '⚠' }}</span>
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible show"
+            role="alert">
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
         {% endwith %}
 
         <div class="main-container">
@@ -69,14 +72,16 @@
                             </div>
                             <div class="mb-3">
                                 <label for="numero_oficio" class="form-label">Número de Oficio</label>
-                                <input type="text" class="form-control" id="numero_oficio" name="numero_oficio" required>
+                                <input type="text" class="form-control" id="numero_oficio" name="numero_oficio"
+                                    required>
                             </div>
                             <div class="mb-3">
                                 <label for="gad_parroquial" class="form-label">GAD Parroquial</label>
-                                <select class="form-select" id="gad_parroquial" name="gad_parroquial" onchange="updateCanton()" required>
+                                <select class="form-select" id="gad_parroquial" name="gad_parroquial"
+                                    onchange="updateCanton()" required>
                                     <option value="">Seleccione...</option>
                                     {% for parroquia in parroquias %}
-                                        <option value="{{ parroquia }}">{{ parroquia }}</option>
+                                    <option value="{{ parroquia }}">{{ parroquia }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -94,96 +99,67 @@
                 </div>
             </div>
 
-            {% if session.role == 'admin' %}
-                <div id="panel-usuarios" class="fade-panel">
-                    <div class="card">
-                        <div class="card-header">Gestión de Usuarios</div>
-                        <div class="card-body">
-                            <h5 class="card-title">Crear Usuario</h5>
-                            <form method="POST" class="mb-4">
-                                <div class="mb-3">
-                                    <input type="text" class="form-control" name="new_username" placeholder="Nombre de usuario" required>
-                                </div>
-                                <div class="mb-3">
-                                    <input type="password" class="form-control" name="new_password" placeholder="Contraseña" required>
-                                </div>
-                                <button type="submit" class="btn btn-success" name="create_user">Crear</button>
-                            </form>
-
-                            <h5 class="card-title">Editar Usuarios</h5>
-                            {% for user in users %}
-                                <form method="POST" class="mb-3">
-                                    <input type="hidden" name="user_id" value="{{ user._id }}">
-                                    <div class="row g-3">
-                                        <div class="col-md-4">
-                                            <input type="text" class="form-control" name="edit_username" value="{{ user.username }}" required>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <input type="password" class="form-control" name="edit_password" placeholder="Nueva contraseña (opcional)">
-                                        </div>
-                                        <div class="col-md-4">
-                                            <button type="submit" class="btn btn-primary" name="edit_user">Actualizar</button>
-                                        </div>
-                                    </div>
-                                </form>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
-
             <div id="panel-historial" class="fade-panel">
                 <div class="card">
                     <div class="card-header">Historial de Registros</div>
                     <div class="card-body">
                         {% if historial %}
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>ID</th>
-                                            <th>Número Oficio</th>
-                                            <th>Parroquia</th>
-                                            <th>Cantón</th>
-                                            <th>Detalle</th>
-                                            <th>Fecha Recibido</th>
-                                            <th>Fecha Enviado</th>
-                                            <th>Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for oficio in historial %}
-                                            <tr>
-                                                <td>{{ oficio.id_secuencial }}</td>
-                                                <td>{{ oficio.numero_oficio }}</td>
-                                                <td>{{ oficio.gad_parroquial }}</td>
-                                                <td>{{ oficio.canton }}</td>
-                                                <td>{{ oficio.detalle }}</td>
-                                                <td>{{ oficio.fecha_enviado_formatted }}</td>
-                                                <td>{{ oficio.fecha_recibido_formatted }}</td>
-                                                <td>
-                                                    <button type="button" class="btn btn-primary btn-sm edit-btn" data-bs-toggle="modal" data-bs-target="#editModal" data-id="{{ oficio._id }}" data-fecha-enviado="{{ oficio.fecha_enviado }}" data-numero-oficio="{{ oficio.numero_oficio }}" data-gad-parroquial="{{ oficio.gad_parroquial }}" data-canton="{{ oficio.canton }}" data-detalle="{{ oficio.detalle }}">
-                                                        Editar
-                                                    </button>
-                                                    <form method="POST" style="display:inline;">
-                                                        <input type="hidden" name="oficio_id" value="{{ oficio._id }}">
-                                                        <button type="submit" class="btn btn-danger btn-sm" name="delete_oficio" onclick="return confirm('¿Está seguro de eliminar este registro?')">Eliminar</button>
-                                                    </form>
-                                                </td>
-                                            </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Número Oficio</th>
+                                        <th>Parroquia</th>
+                                        <th>Cantón</th>
+                                        <th>Detalle</th>
+                                        <th>Fecha Recibido</th>
+                                        <th>Fecha Enviado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for oficio in historial %}
+                                    <tr>
+                                        <td>{{ oficio.id_secuencial }}</td>
+                                        <td>{{ oficio.numero_oficio }}</td>
+                                        <td>{{ oficio.gad_parroquial }}</td>
+                                        <td>{{ oficio.canton }}</td>
+                                        <td>{{ oficio.detalle }}</td>
+                                        <td>{{ oficio.fecha_enviado_formatted }}</td>
+                                        <td>{{ oficio.fecha_recibido_formatted }}</td>
+                                        <td>
+                                            <button type="button" class="btn btn-primary btn-sm edit-btn"
+                                                data-bs-toggle="modal" data-bs-target="#editModal"
+                                                data-id="{{ oficio._id }}"
+                                                data-fecha-enviado="{{ oficio.fecha_enviado }}"
+                                                data-numero-oficio="{{ oficio.numero_oficio }}"
+                                                data-gad-parroquial="{{ oficio.gad_parroquial }}"
+                                                data-canton="{{ oficio.canton }}" data-detalle="{{ oficio.detalle }}">
+                                                <i class="bi bi-pencil"></i>
+                                                Editar
+                                            </button>
+                                            <form method="POST" style="display:inline;">
+                                                <input type="hidden" name="oficio_id" value="{{ oficio._id }}">
+                                                <button type="submit" class="btn btn-danger btn-sm" name="delete_oficio"
+                                                    onclick="return confirm('¿Está seguro de eliminar este registro?')">
+                                                    <i class="bi bi-trash"></i>Eliminar
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
                         {% else %}
-                            <p class="text-muted">Sin registros en el historial.</p>
+                        <p class="text-muted">Sin registros en el historial.</p>
                         {% endif %}
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Edit Modal -->
         <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -196,18 +172,21 @@
                             <input type="hidden" name="oficio_id" id="edit_oficio_id">
                             <div class="mb-3">
                                 <label for="edit_fecha_enviado" class="form-label">Fecha Enviado</label>
-                                <input type="date" class="form-control" id="edit_fecha_enviado" name="edit_fecha_enviado" required>
+                                <input type="date" class="form-control" id="edit_fecha_enviado"
+                                    name="edit_fecha_enviado" required>
                             </div>
                             <div class="mb-3">
                                 <label for="edit_numero_oficio" class="form-label">Número de Oficio</label>
-                                <input type="text" class="form-control" id="edit_numero_oficio" name="edit_numero_oficio" required>
+                                <input type="text" class="form-control" id="edit_numero_oficio"
+                                    name="edit_numero_oficio" required>
                             </div>
                             <div class="mb-3">
                                 <label for="edit_gad_parroquial" class="form-label">GAD Parroquial</label>
-                                <select class="form-select" id="edit_gad_parroquial" name="edit_gad_parroquial" onchange="updateCantonEdit()" required>
+                                <select class="form-select" id="edit_gad_parroquial" name="edit_gad_parroquial"
+                                    onchange="updateCantonEdit()" required>
                                     <option value="">Seleccione...</option>
                                     {% for parroquia in parroquias %}
-                                        <option value="{{ parroquia }}">{{ parroquia }}</option>
+                                    <option value="{{ parroquia }}">{{ parroquia }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -217,7 +196,8 @@
                             </div>
                             <div class="mb-3">
                                 <label for="edit_detalle" class="form-label">Detalle</label>
-                                <textarea class="form-control" id="edit_detalle" name="edit_detalle" rows="4"></textarea>
+                                <textarea class="form-control" id="edit_detalle" name="edit_detalle"
+                                    rows="4"></textarea>
                             </div>
                             <button type="submit" class="btn btn-success" name="edit_oficio">Guardar</button>
                         </form>
@@ -226,8 +206,8 @@
             </div>
         </div>
 
-        <!-- Change Password Modal -->
-        <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel" aria-hidden="true">
+        <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel"
+            aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
@@ -238,15 +218,18 @@
                         <form method="POST" action="{{ url_for('change_password') }}">
                             <div class="mb-3">
                                 <label for="old_password" class="form-label">Contraseña Anterior</label>
-                                <input type="password" class="form-control" id="old_password" name="old_password" required>
+                                <input type="password" class="form-control" id="old_password" name="old_password"
+                                    required>
                             </div>
                             <div class="mb-3">
                                 <label for="new_password" class="form-label">Nueva Contraseña</label>
-                                <input type="password" class="form-control" id="new_password" name="new_password" required>
+                                <input type="password" class="form-control" id="new_password" name="new_password"
+                                    required>
                             </div>
                             <div class="mb-3">
                                 <label for="confirm_password" class="form-label">Confirmar Nueva Contraseña</label>
-                                <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                                <input type="password" class="form-control" id="confirm_password"
+                                    name="confirm_password" required>
                             </div>
                             <button type="submit" class="btn btn-success">Guardar</button>
                         </form>
@@ -260,4 +243,5 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css"></script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
+
 </html>

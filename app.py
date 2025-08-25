@@ -7,19 +7,18 @@ import os
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
-
 client = MongoClient('mongodb+srv://ogmoscosoj:KcB4gSO579gBCSzY@conagoparedb.vwmlbqg.mongodb.net/?retryWrites=true&w=majority&appName=conagoparedb')
 db_oficios = client['conagoparedb']
 oficios = db_oficios['oficios']
 parroquias = db_oficios['parroquias']
 users = db_oficios['users_db']
 notifications = db_oficios['notifications']
+tipos_asesoria_coll = db_oficios['tipos_asesoria']
 try:
     client.admin.command('ping')
     print("Pinged your deployment. You successfully connected to MongoDB!")
 except Exception as e:
     print(e)
-
 tipos_asesoria = ['Asesoría Técnica', 'Inspección', 'Consultoría']
 roles_list = ['receiver', 'designer', 'tecnico', 'admin']
 
@@ -46,7 +45,6 @@ def login():
         if user:
             session['user'] = username
             session['role'] = user['role']
-            flash('Login exitoso', 'success')
             if session['role'] == 'receiver':
                 return redirect(url_for('receive'))
             elif session['role'] == 'designer':
@@ -63,7 +61,6 @@ def login():
 def logout():
     session.pop('user', None)
     session.pop('role', None)
-    flash('Sesión cerrada exitosamente', 'success')
     return redirect(url_for('login'))
 
 @app.route('/change_password', methods=['POST'])
@@ -222,8 +219,7 @@ def receive():
                 'canton': request.form['canton'],
                 'detalle': request.form['detalle'],
                 'estado': 'pendiente',
-                'tecnico_asignado': None,
-                'tipo_asesoria': None,
+                'assignments': [],
                 'fecha_designacion': None,
                 'desarrollo_actividad': None,
                 'fecha_asesoria': None,
@@ -232,7 +228,6 @@ def receive():
             }
             try:
                 oficios.insert_one(data)
-                # Notify all designers
                 designers = users.find({'role': 'designer'})
                 for designer in designers:
                     notifications.insert_one({
@@ -246,22 +241,24 @@ def receive():
                 flash(f'Error al crear registro: {str(e)}', 'error')
         return redirect(url_for('receive'))
     return render_template('receive.html', historial=historial, parroquias=parroquias_list, users=users_list)
-
 @app.route('/design', methods=['GET', 'POST'])
 def design():
+    tipos_asesoria = ['Asesoría Técnica', 'Inspección', 'Consultoría']
     if 'role' not in session or session['role'] != 'designer':
         return redirect(url_for('login'))
     pendientes = list(oficios.find({'estado': 'pendiente'}))
     designados = list(oficios.find({'estado': 'designado'}))
     for p in pendientes + designados:
         p['fecha_designacion_formatted'] = format_date(p.get('fecha_designacion'))
-        # Ensure tecnico_asignado is a list for display
-        if isinstance(p.get('tecnico_asignado'), str):
-            p['tecnico_asignado'] = [p['tecnico_asignado']] if p['tecnico_asignado'] else []
-        elif p.get('tecnico_asignado') is None:
-            p['tecnico_asignado'] = []
+        if not p.get('assignments'):
+            p['assignments'] = []
+        elif isinstance(p.get('tecnico_asignado'), list) and isinstance(p.get('tipo_asesoria'), list):
+            p['assignments'] = [{'tecnico': t, 'tipo_asesoria': a} for t, a in zip(p.get('tecnico_asignado', []), p.get('tipo_asesoria', []))]
+        elif isinstance(p.get('tecnico_asignado'), list) and isinstance(p.get('tipo_asesoria'), str):
+            p['assignments'] = [{'tecnico': t, 'tipo_asesoria': p.get('tipo_asesoria')} for t in p.get('tecnico_asignado', [])]
     tecnicos_list = sorted([u['username'] for u in users.find({'role': 'tecnico'})])
     users_list = list(users.find())
+    parroquias_list = list(parroquias.find())
     if request.method == 'POST':
         if 'create_user' in request.form:
             username = request.form['new_username']
@@ -274,6 +271,7 @@ def design():
                     flash('Usuario creado exitosamente', 'success')
                 except Exception as e:
                     flash(f'Error al crear usuario: {str(e)}', 'error')
+            return redirect(url_for('design'))
         elif 'edit_user' in request.form:
             user_id = ObjectId(request.form['user_id'])
             update = {'$set': {'username': request.form['edit_username']}}
@@ -284,6 +282,7 @@ def design():
                 flash('Usuario actualizado exitosamente', 'success')
             except Exception as e:
                 flash(f'Error al actualizar usuario: {str(e)}', 'error')
+            return redirect(url_for('design'))
         elif 'delete_oficio' in request.form:
             oficio_id = ObjectId(request.form['oficio_id'])
             oficio = oficios.find_one({'_id': oficio_id})
@@ -298,62 +297,91 @@ def design():
                     flash('Registro eliminado y IDs actualizados exitosamente', 'success')
                 except Exception as e:
                     flash(f'Error al eliminar registro o actualizar IDs: {str(e)}', 'error')
+            return redirect(url_for('design'))
         elif 'edit_oficio' in request.form:
             oficio_id = ObjectId(request.form['oficio_id'])
-            tecnicos = request.form.getlist('edit_tecnico_asignado[]')
-            tipo_asesoria = request.form.get('edit_tipo_asesoria')
+            tecnicos = request.form.getlist('tecnico_asignado[]')
+            tipos_asesoria = request.form.getlist('tipo_asesoria[]')
+            if len(tecnicos) != len(tipos_asesoria) or not all(tecnicos) or not all(tipos_asesoria):
+                flash('Error: Seleccione un técnico y tipo de asesoría para cada asignación', 'error')
+                return redirect(url_for('design'))
+            assignments = [{'tecnico': t, 'tipo_asesoria': a} for t, a in zip(tecnicos, tipos_asesoria) if t and a]
             update_data = {
                 '$set': {
-                    'tecnico_asignado': tecnicos if tecnicos and 'Ninguno' not in tecnicos else [],
-                    'tipo_asesoria': tipo_asesoria if tipo_asesoria != 'Ninguno' else None
+                    'fecha_enviado': request.form['fecha_enviado'],
+                    'numero_oficio': request.form['numero_oficio'],
+                    'gad_parroquial': request.form['gad_parroquial'],
+                    'canton': request.form['canton'],
+                    'detalle': request.form['detalle'],
+                    'assignments': assignments,
+                    'estado': 'designado' if assignments else 'pendiente',
+                    'fecha_designacion': datetime.now().isoformat() if assignments else None,
+                    'sub_estado': 'en_proceso' if assignments else None
                 }
             }
             try:
                 oficios.update_one({'_id': oficio_id}, update_data)
-                flash('Registro actualizado exitosamente', 'success')
-            except Exception as e:
-                flash(f'Error al actualizar registro: {str(e)}', 'error')
-        else:
-            oficio_id = ObjectId(request.form['oficio_id'])
-            tecnicos = request.form.getlist('tecnico_asignado[]')
-            tipo = request.form['tipo_asesoria']
-            if tecnicos and 'Ninguno' not in tecnicos and tipo != 'Ninguno':
-                update_data = {
-                    '$set': {
-                        'tecnico_asignado': tecnicos,
-                        'tipo_asesoria': tipo,
-                        'fecha_designacion': datetime.now().isoformat(),
-                        'estado': 'designado',
-                        'sub_estado': 'en_proceso'
-                    }
-                }
-                try:
-                    oficios.update_one({'_id': oficio_id}, update_data)
-                    # Notify all assigned tecnicos
+                if assignments:
                     oficio = oficios.find_one({'_id': oficio_id})
-                    for tecnico in tecnicos:
+                    id_secuencial = oficio['id_secuencial']
+                    for assignment in assignments:
                         notifications.insert_one({
-                            'user': tecnico,
-                            'message': f'Tienes una nueva asignación pendiente: Oficio {oficio["id_secuencial"]}',
+                            'user': assignment['tecnico'],
+                            'message': f'Tienes una nueva asignación pendiente: Oficio {id_secuencial}',
                             'timestamp': datetime.now().isoformat(),
                             'read': False
                         })
-                    flash('Designación exitosa', 'success')
-                except Exception as e:
-                    flash(f'Error al designar: {str(e)}', 'error')
-            else:
-                flash('Seleccione al menos un técnico y tipo de asesoría', 'error')
-        return redirect(url_for('design'))
-    return render_template('design.html', pendientes=pendientes, designados=designados, tecnicos=tecnicos_list, tipos=tipos_asesoria, users=users_list)
+                flash('Registro actualizado exitosamente', 'success')
+            except Exception as e:
+                flash(f'Error al actualizar registro: {str(e)}', 'error')
+            return redirect(url_for('design'))
+        else:
+            oficio_id = ObjectId(request.form['oficio_id'])
+            tecnicos = request.form.getlist('tecnico_asignado[]')
+            tipos_asesoria = request.form.getlist('tipo_asesoria[]')
+            if len(tecnicos) != len(tipos_asesoria) or not all(tecnicos) or not all(tipos_asesoria):
+                flash('Error: Seleccione un técnico y tipo de asesoría para cada asignación', 'error')
+                return redirect(url_for('design'))
+            assignments = [{'tecnico': t, 'tipo_asesoria': a} for t, a in zip(tecnicos, tipos_asesoria) if t != 'Ninguno' and a != 'Ninguno']
+            if not assignments:
+                flash('Seleccione al menos un técnico y tipo de asesoría válidos', 'error')
+                return redirect(url_for('design'))
+            update_data = {
+                '$set': {
+                    'assignments': assignments,
+                    'fecha_designacion': datetime.now().isoformat(),
+                    'estado': 'designado',
+                    'sub_estado': 'en_proceso'
+                }
+            }
+            try:
+                oficios.update_one({'_id': oficio_id}, update_data)
+                oficio = oficios.find_one({'_id': oficio_id})
+                if not oficio:
+                    flash('Error: No se encontró el oficio', 'error')
+                    return redirect(url_for('design'))
+                id_secuencial = oficio['id_secuencial']
+                for assignment in assignments:
+                    notifications.insert_one({
+                        'user': assignment['tecnico'],
+                        'message': f'Tienes una nueva asignación pendiente: Oficio {id_secuencial}',
+                        'timestamp': datetime.now().isoformat(),
+                        'read': False
+                    })
+                flash('Designación exitosa', 'success')
+            except Exception as e:
+                flash(f'Error al designar: {str(e)}', 'error')
+            return redirect(url_for('design'))
+    return render_template('design.html', pendientes=pendientes, designados=designados, tecnicos=tecnicos_list, tipos=tipos_asesoria, users=users_list, parroquias=parroquias_list)
 
 @app.route('/tecnico', methods=['GET', 'POST'])
 def tecnico():
     if 'role' not in session or session['role'] != 'tecnico':
         return redirect(url_for('login'))
     username = session['user']
-    asignados = list(oficios.find({'tecnico_asignado': {'$in': [username]}, 'sub_estado': 'en_proceso'}))
-    completados = list(oficios.find({'tecnico_asignado': {'$in': [username]}, 'sub_estado': 'finalizado'}))
-    for c in completados:
+    asignados = list(oficios.find({'assignments.tecnico': username, 'sub_estado': 'en_proceso'}))
+    completados = list(oficios.find({'assignments.tecnico': username, 'sub_estado': 'finalizado'}))
+    for c in asignados + completados:
         c['fecha_asesoria_formatted'] = format_date(c.get('fecha_asesoria'))
     users_list = list(users.find())
     if request.method == 'POST':
@@ -399,42 +427,91 @@ def tecnico():
 @app.route('/admin', methods=['GET', 'POST'])
 def admin():
     if 'role' not in session or session['role'] != 'admin':
+        flash('Acceso denegado: No tienes permisos o no has iniciado sesión.', 'error')
         return redirect(url_for('login'))
+
     all_oficios = list(oficios.find())
     for o in all_oficios:
         o['fecha_recibido_formatted'] = format_date(o.get('fecha_recibido'))
         o['fecha_enviado_formatted'] = format_date(o.get('fecha_enviado'))
         o['fecha_designacion_formatted'] = format_date(o.get('fecha_designacion'))
-        if isinstance(o.get('tecnico_asignado'), str):
-            o['tecnico_asignado'] = [o['tecnico_asignado']] if o['tecnico_asignado'] else []
-        elif o.get('tecnico_asignado') is None:
-            o['tecnico_asignado'] = []
+        o['assignments'] = o.get('assignments', [])
+
     users_list = list(users.find())
     parroquias_list = list(parroquias.find())
+    tipos_asesoria_list = list(tipos_asesoria_coll.find())
     tecnicos_list = sorted([u['username'] for u in users.find({'role': 'tecnico'})])
+
     if request.method == 'POST':
         if 'create_user' in request.form:
-            username = request.form['new_username']
-            password = request.form['new_password']
+            username = request.form['username']
+            password = request.form['password']
+            nombre = request.form['nombre']
+            apellido = request.form['apellido']
             role = request.form['role']
             if users.find_one({'username': username}):
                 flash('Usuario ya existe', 'error')
             else:
                 try:
-                    users.insert_one({'username': username, 'password': password, 'role': role})
+                    users.insert_one({
+                        'username': username,
+                        'password': password,
+                        'nombre': nombre,
+                        'apellido': apellido,
+                        'role': role
+                    })
                     flash('Usuario creado exitosamente', 'success')
                 except Exception as e:
                     flash(f'Error al crear usuario: {str(e)}', 'error')
         elif 'edit_user' in request.form:
             user_id = ObjectId(request.form['user_id'])
-            update = {'$set': {'username': request.form['edit_username'], 'role': request.form['edit_role']}}
-            if request.form.get('edit_password'):
-                update['$set']['password'] = request.form['edit_password']
+            update = {
+                '$set': {
+                    'username': request.form['username'],
+                    'nombre': request.form['nombre'],
+                    'apellido': request.form['apellido'],
+                    'role': request.form['role']
+                }
+            }
+            if request.form.get('password'):
+                update['$set']['password'] = request.form['password']
             try:
                 users.update_one({'_id': user_id}, update)
                 flash('Usuario actualizado exitosamente', 'success')
             except Exception as e:
                 flash(f'Error al actualizar usuario: {str(e)}', 'error')
+        elif 'delete_user' in request.form:
+            user_id = ObjectId(request.form['user_id'])
+            try:
+                users.delete_one({'_id': user_id})
+                flash('Usuario eliminado exitosamente', 'success')
+            except Exception as e:
+                flash(f'Error al eliminar usuario: {str(e)}', 'error')
+        elif 'add_tipo_asesoria' in request.form:
+            nombre = request.form['nombre']
+            if tipos_asesoria_coll.find_one({'nombre': nombre}):
+                flash('Tipo de asesoría ya existe', 'error')
+            else:
+                try:
+                    tipos_asesoria_coll.insert_one({'nombre': nombre})
+                    flash('Tipo de asesoría añadido exitosamente', 'success')
+                except Exception as e:
+                    flash(f'Error al añadir tipo de asesoría: {str(e)}', 'error')
+        elif 'edit_tipo_asesoria' in request.form:
+            tipo_id = ObjectId(request.form['tipo_id'])
+            nuevo_nombre = request.form['edit_nombre']
+            try:
+                tipos_asesoria_coll.update_one({'_id': tipo_id}, {'$set': {'nombre': nuevo_nombre}})
+                flash('Tipo de asesoría actualizado exitosamente', 'success')
+            except Exception as e:
+                flash(f'Error al actualizar tipo de asesoría: {str(e)}', 'error')
+        elif 'delete_tipo_asesoria' in request.form:
+            tipo_id = ObjectId(request.form['tipo_id'])
+            try:
+                tipos_asesoria_coll.delete_one({'_id': tipo_id})
+                flash('Tipo de asesoría eliminado exitosamente', 'success')
+            except Exception as e:
+                flash(f'Error al eliminar tipo de asesoría: {str(e)}', 'error')
         elif 'add_parroquia' in request.form:
             parroquia = request.form['parroquia']
             canton = request.form['canton']
@@ -454,6 +531,13 @@ def admin():
                 flash('Parroquia actualizada exitosamente', 'success')
             except Exception as e:
                 flash(f'Error al actualizar parroquia: {str(e)}', 'error')
+        elif 'delete_parroquia' in request.form:
+            parroquia_id = ObjectId(request.form['parroquia_id'])
+            try:
+                parroquias.delete_one({'_id': parroquia_id})
+                flash('Parroquia eliminada exitosamente', 'success')
+            except Exception as e:
+                flash(f'Error al eliminar parroquia: {str(e)}', 'error')
         elif 'delete_oficio' in request.form:
             oficio_id = ObjectId(request.form['oficio_id'])
             oficio = oficios.find_one({'_id': oficio_id})
@@ -470,25 +554,48 @@ def admin():
                     flash(f'Error al eliminar registro o actualizar IDs: {str(e)}', 'error')
         elif 'edit_oficio' in request.form:
             oficio_id = ObjectId(request.form['oficio_id'])
-            tecnicos = request.form.getlist('edit_tecnico_asignado[]')
+            tecnicos = request.form.getlist('tecnico_asignado[]')
+            tipos_asesoria = request.form.getlist('tipo_asesoria[]')
+            assignments = [{'tecnico': t, 'tipo_asesoria': a} for t, a in zip(tecnicos, tipos_asesoria) if t != 'Ninguno' and a != 'Ninguno']
             update_data = {
                 '$set': {
-                    'fecha_enviado': request.form['edit_fecha_enviado'],
-                    'numero_oficio': request.form['edit_numero_oficio'],
-                    'gad_parroquial': request.form['edit_gad_parroquial'],
-                    'canton': request.form['edit_canton'],
-                    'detalle': request.form['edit_detalle'],
-                    'tecnico_asignado': tecnicos if tecnicos and 'Ninguno' not in tecnicos else [],
-                    'tipo_asesoria': request.form.get('edit_tipo_asesoria') if request.form.get('edit_tipo_asesoria') != 'Ninguno' else None
+                    'fecha_enviado': request.form.get('fecha_enviado', ''),
+                    'numero_oficio': request.form.get('numero_oficio', ''),
+                    'gad_parroquial': request.form.get('gad_parroquial', ''),
+                    'canton': request.form.get('canton', ''),
+                    'detalle': request.form.get('detalle', ''),
+                    'assignments': assignments,
+                    'estado': 'designado' if assignments else 'pendiente',
+                    'fecha_designacion': datetime.now().isoformat() if assignments else None,
+                    'sub_estado': 'en_proceso' if assignments else None
                 }
             }
             try:
                 oficios.update_one({'_id': oficio_id}, update_data)
+                if assignments:
+                    oficio = oficios.find_one({'_id': oficio_id})
+                    if not oficio:
+                        flash('Error: No se encontró el oficio', 'error')
+                        return redirect(url_for('admin'))
+                    for assignment in assignments:
+                        notifications.insert_one({
+                            'user': assignment['tecnico'],
+                            'message': f'Tienes una nueva asignación pendiente: Oficio {oficio["id_secuencial"]}',
+                            'timestamp': datetime.now().isoformat(),
+                            'read': False
+                        })
                 flash('Registro actualizado exitosamente', 'success')
             except Exception as e:
                 flash(f'Error al actualizar registro: {str(e)}', 'error')
-        return redirect(url_for('admin'))
-    return render_template('admin.html', oficios=all_oficios, users=users_list, parroquias=parroquias_list, roles=roles_list, tecnicos=tecnicos_list, tipos=tipos_asesoria)
+            return redirect(url_for('admin'))
 
+    return render_template('admin.html', oficios=all_oficios, users=users_list, parroquias=parroquias_list, roles=roles_list, tecnicos=tecnicos_list, tipos_asesoria=tipos_asesoria_list)
+
+@app.route('/notificaciones/count')
+def notificaciones_count():
+    if 'user' not in session:
+        return jsonify({'count': 0})
+    count = notifications.count_documents({'user': session['user'], 'read': False})
+    return jsonify({'count': count})
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)), debug=True)

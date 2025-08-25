@@ -1,159 +1,5 @@
-function updateCanton() {
-    const parroquia = document.getElementById('gad_parroquial').value;
-    if (parroquia) {
-        fetch('/get_canton', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ parroquia: parroquia })
-        })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('canton').value = data.canton;
-            })
-            .catch(error => console.error('Error:', error));
-    } else {
-        document.getElementById('canton').value = '';
-    }
-}
-
-function updateCantonEdit() {
-    const parroquia = document.getElementById('edit_gad_parroquial').value;
-    if (parroquia) {
-        fetch('/get_canton', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ parroquia: parroquia })
-        })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('edit_canton').value = data.canton;
-            })
-            .catch(error => console.error('Error:', error));
-    } else {
-        document.getElementById('edit_canton').value = '';
-    }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    const flashes = document.querySelectorAll('.alert');
-    flashes.forEach((flash, index) => {
-        flash.style.top = `${20 + (index * 80)}px`;
-        setTimeout(() => {
-            flash.style.animation = 'fadeOut 0.5s ease-in-out';
-            setTimeout(() => flash.remove(), 500);
-        }, 3000);
-    });
-
-    const editModal = document.getElementById('editModal');
-    if (editModal) {
-        editModal.addEventListener('show.bs.modal', function (event) {
-            const button = event.relatedTarget;
-            const id = button.getAttribute('data-id');
-            const fechaEnviado = button.getAttribute('data-fecha-enviado');
-            const numeroOficio = button.getAttribute('data-numero-oficio');
-            const gadParroquial = button.getAttribute('data-gad-parroquial');
-            const canton = button.getAttribute('data-canton');
-            const detalle = button.getAttribute('data-detalle');
-            const tecnicoAsignado = button.getAttribute('data-tecnico-asignado') || '';
-            const tipoAsesoria = button.getAttribute('data-tipo-asesoria') || '';
-
-            document.getElementById('edit_oficio_id').value = id;
-            document.getElementById('edit_fecha_enviado').value = fechaEnviado ? fechaEnviado.split('T')[0] : '';
-            document.getElementById('edit_numero_oficio').value = numeroOficio;
-            document.getElementById('edit_gad_parroquial').value = gadParroquial;
-            document.getElementById('edit_canton').value = canton;
-            document.getElementById('edit_detalle').value = detalle;
-            document.getElementById('edit_tecnico_asignado').value = tecnicoAsignado;
-            document.getElementById('edit_tipo_asesoria').value = tipoAsesoria;
-
-            updateCantonEdit();
-        });
-    }
-
-    showPanel('registro');
-    showPanel('pendientes');
-    showPanel('asignados');
-    showPanel('oficios');
-});
-
-function showPanel(panel) {
-    const panels = document.querySelectorAll('.fade-panel');
-    const tabs = document.querySelectorAll('.nav-link');
-
-    panels.forEach(p => p.classList.remove('active'));
-    tabs.forEach(t => t.classList.remove('active'));
-
-    const panelElement = document.getElementById(`panel-${panel}`);
-    const tabElement = document.getElementById(`tab-${panel}`);
-
-    if (panelElement && tabElement) {
-        panelElement.classList.add('active');
-        tabElement.classList.add('active');
-    }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    const flashes = document.querySelectorAll('.alert');
-    flashes.forEach((flash, index) => {
-        flash.style.top = `${20 + (index * 80)}px`;
-        setTimeout(() => {
-            flash.style.animation = 'fadeOut 0.5s ease-in-out';
-            setTimeout(() => flash.remove(), 500);
-        }, 3000);
-    });
-
-    const editModal = document.getElementById('editModal');
-    if (editModal) {
-        editModal.addEventListener('show.bs.modal', function (event) {
-            const button = event.relatedTarget;
-            const id = button.getAttribute('data-id');
-            const fechaEnviado = button.getAttribute('data-fecha-enviado');
-            const numeroOficio = button.getAttribute('data-numero-oficio');
-            const gadParroquial = button.getAttribute('data-gad-parroquial');
-            const canton = button.getAttribute('data-canton');
-            const detalle = button.getAttribute('data-detalle');
-            const tecnicoAsignado = button.getAttribute('data-tecnico-asignado') || '';
-            const tipoAsesoria = button.getAttribute('data-tipo-asesoria') || '';
-
-            document.getElementById('edit_oficio_id').value = id;
-            document.getElementById('edit_fecha_enviado').value = fechaEnviado ? fechaEnviado.split('T')[0] : '';
-            document.getElementById('edit_numero_oficio').value = numeroOficio;
-            document.getElementById('edit_gad_parroquial').value = gadParroquial;
-            document.getElementById('edit_canton').value = canton;
-            document.getElementById('edit_detalle').value = detalle;
-            document.getElementById('edit_tecnico_asignado').value = tecnicoAsignado;
-            document.getElementById('edit_tipo_asesoria').value = tipoAsesoria;
-
-            updateCantonEdit();
-        });
-    }
-
-    const posiblesPaneles = ['registro', 'pendientes', 'asignados', 'oficios', 'historial', 'usuarios'];
-    for (const panel of posiblesPaneles) {
-        if (document.getElementById(`panel-${panel}`)) {
-            showPanel(panel);
-            break;
-        }
-    }
-});
-
-function showPanel(panelId) {
-    document.querySelectorAll('.fade-panel').forEach(panel => {
-        panel.classList.remove('active');
-    });
-    document.getElementById(`panel-${panelId}`).classList.add('active');
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.classList.remove('active');
-    });
-    document.getElementById(`tab-${panelId}`).classList.add('active');
-}
-
 async function updateCanton() {
-    const parroquia = document.getElementById('gad_parroquial').value;
+    const parroquia = document.getElementById('gad_parroquial')?.value;
     if (parroquia) {
         const response = await fetch('/get_canton', {
             method: 'POST',
@@ -168,7 +14,7 @@ async function updateCanton() {
 }
 
 async function updateCantonEdit() {
-    const parroquia = document.getElementById('edit_gad_parroquial').value;
+    const parroquia = document.getElementById('edit_gad_parroquial')?.value;
     if (parroquia) {
         const response = await fetch('/get_canton', {
             method: 'POST',
@@ -182,20 +28,130 @@ async function updateCantonEdit() {
     }
 }
 
-document.querySelectorAll('.edit-btn').forEach(button => {
-    button.addEventListener('click', function () {
-        const modal = document.getElementById('editModal');
-        modal.querySelector('#edit_oficio_id').value = this.dataset.id;
-        modal.querySelector('#edit_fecha_enviado').value = this.dataset.fechaEnviado || '';
-        modal.querySelector('#edit_numero_oficio').value = this.dataset.numeroOficio || '';
-        modal.querySelector('#edit_gad_parroquial').value = this.dataset.gadParroquial || '';
-        modal.querySelector('#edit_canton').value = this.dataset.canton || '';
-        modal.querySelector('#edit_detalle').value = this.dataset.detalle || '';
-        modal.querySelector('#edit_tecnico_asignado').value = this.dataset.tecnicoAsignado || 'Ninguno';
-        modal.querySelector('#edit_tipo_asesoria').value = this.dataset.tipoAsesoria || 'Ninguno';
-        updateCantonEdit();
+function addTechnicianPair(container, tecnicos, tipos, selectedTechnician = '', selectedAdvisory = '') {
+    const pairDiv = document.createElement('div');
+    pairDiv.className = 'tecnico-asesoria-pair mb-2';
+    pairDiv.innerHTML = `
+        <div class="row g-2 align-items-center">
+            <div class="col">
+                <select name="tecnico_asignado[]" class="form-select form-select-sm" required>
+                    <option value="" disabled ${!selectedTechnician ? 'selected' : ''}>Seleccione Técnico</option>
+                    ${tecnicos.map(tecnico => `<option value="${tecnico}" ${selectedTechnician === tecnico ? 'selected' : ''}>${tecnico}</option>`).join('')}
+                </select>
+            </div>
+            <div class="col">
+                <select name="tipo_asesoria[]" class="form-select form-select-sm" required>
+                    <option value="" disabled ${!selectedAdvisory ? 'selected' : ''}>Tipo Asesoría</option>
+                    ${tipos.map(tipo => `<option value="${tipo}" ${selectedAdvisory === tipo ? 'selected' : ''}>${tipo}</option>`).join('')}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="button" class="btn btn-sm btn-danger remove-pair">X</button>
+            </div>
+        </div>
+    `;
+    container.appendChild(pairDiv);
+    pairDiv.querySelector('.remove-pair').addEventListener('click', () => {
+        if (container.querySelectorAll('.tecnico-asesoria-pair').length > 1) {
+            pairDiv.remove();
+        }
     });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const flashes = document.querySelectorAll('.alert');
+    flashes.forEach((flash, index) => {
+        flash.style.top = `${20 + (index * 80)}px`;
+        setTimeout(() => {
+            flash.style.animation = 'fadeOut 0.5s ease-in-out';
+            setTimeout(() => flash.remove(), 500);
+        }, 3000);
+    });
+
+    const editModal = document.getElementById('editModal');
+    if (editModal) {
+        editModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const id = button.getAttribute('data-id');
+            const fechaEnviado = button.getAttribute('data-fecha-enviado');
+            const numeroOficio = button.getAttribute('data-numero-oficio');
+            const gadParroquial = button.getAttribute('data-gad-parroquial');
+            const canton = button.getAttribute('data-canton');
+            const detalle = button.getAttribute('data-detalle');
+            const assignments = JSON.parse(button.getAttribute('data-assignments') || '[]');
+
+            document.getElementById('edit_oficio_id').value = id;
+            document.getElementById('edit_fecha_enviado').value = fechaEnviado ? fechaEnviado.split('T')[0] : '';
+            document.getElementById('edit_numero_oficio').value = numeroOficio || '';
+            document.getElementById('edit_gad_parroquial').value = gadParroquial || '';
+            document.getElementById('edit_canton').value = canton || '';
+            document.getElementById('edit_detalle').value = detalle || '';
+
+            const container = document.getElementById('edit_tecnico_asesoria_pairs');
+            container.innerHTML = '';
+            const tecnicos = Array.from(document.querySelector('select[name="tecnico_asignado[]"]')?.options || [])
+                .map(opt => opt.value)
+                .filter(val => val);
+            const tipos = Array.from(document.querySelector('select[name="tipo_asesoria[]"]')?.options || [])
+                .map(opt => opt.value)
+                .filter(val => val);
+            if (assignments.length > 0) {
+                assignments.forEach(assignment => {
+                    addTechnicianPair(container, tecnicos, tipos, assignment.tecnico, assignment.tipo_asesoria);
+                });
+            } else {
+                addTechnicianPair(container, tecnicos, tipos);
+            }
+
+            updateCantonEdit();
+        });
+
+        const addPairButton = editModal.querySelector('.add-pair');
+        addPairButton.addEventListener('click', () => {
+            const container = document.getElementById('edit_tecnico_asesoria_pairs');
+            const tecnicos = Array.from(document.querySelector('select[name="tecnico_asignado[]"]')?.options || [])
+                .map(opt => opt.value)
+                .filter(val => val);
+            const tipos = Array.from(document.querySelector('select[name="tipo_asesoria[]"]')?.options || [])
+                .map(opt => opt.value)
+                .filter(val => val);
+            addTechnicianPair(container, tecnicos, tipos);
+        });
+    }
+
+    document.querySelectorAll('.add-pair').forEach(button => {
+        button.addEventListener('click', () => {
+            const oficioId = button.getAttribute('data-oficio-id');
+            const container = document.getElementById(`tecnico-asesoria-pairs-${oficioId}`);
+            const tecnicos = Array.from(document.querySelector('select[name="tecnico_asignado[]"]')?.options || [])
+                .map(opt => opt.value)
+                .filter(val => val);
+            const tipos = Array.from(document.querySelector('select[name="tipo_asesoria[]"]')?.options || [])
+                .map(opt => opt.value)
+                .filter(val => val);
+            addTechnicianPair(container, tecnicos, tipos);
+        });
+    });
+
+    const posiblesPaneles = ['pendientes', 'designados', 'usuarios'];
+    for (const panel of posiblesPaneles) {
+        if (document.getElementById(`panel-${panel}`)) {
+            showPanel(panel);
+            break;
+        }
+    }
 });
+
+function showPanel(panelId) {
+    document.querySelectorAll('.fade-panel').forEach(panel => panel.classList.remove('active'));
+    document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+    const panelElement = document.getElementById(`panel-${panelId}`);
+    const tabElement = document.getElementById(`tab-${panelId}`);
+    if (panelElement && tabElement) {
+        panelElement.classList.add('active');
+        tabElement.classList.add('active');
+    }
+}
 
 async function fetchNotifications() {
     try {
@@ -241,18 +197,92 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchNotifications();
     setInterval(fetchNotifications, 10000);
 });
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('add-pair')) {
+        const oficioId = e.target.getAttribute('data-oficio-id');
+        const container = document.getElementById('tecnico-asesoria-pairs-' + oficioId);
+        if (container) {
+            const pairDiv = document.createElement('div');
+            pairDiv.className = 'tecnico-asesoria-pair mb-2';
+            pairDiv.innerHTML = `
+                <div class="row g-2 align-items-center">
+                    <div class="col">
+                        <select class="form-select form-select-sm" name="tecnico_asignado[]" required>
+                            <option value="" disabled selected>Seleccione Técnico</option>
+                            ${tecnicos.map(tecnico => `<option value="${tecnico}">${tecnico}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="col">
+                        <select class="form-select form-select-sm" name="tipo_asesoria[]" required>
+                            <option value="" disabled selected>Tipo Asesoría</option>
+                            ${tipos.map(tipo => `<option value="${tipo}">${tipo}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" class="btn btn-sm btn-danger remove-pair">X</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(pairDiv);
+        }
+    }
+    if (e.target.classList.contains('remove-pair')) {
+        const pairDiv = e.target.closest('.tecnico-asesoria-pair');
+        if (pairDiv) pairDiv.remove();
+    }
+});
 
-document.querySelectorAll('.edit-btn').forEach(button => {
-    button.addEventListener('click', function () {
-        const modal = document.getElementById('editModal');
-        modal.querySelector('#edit_oficio_id').value = this.dataset.id;
-        const tecnicosAsignados = JSON.parse(this.dataset.tecnicoAsignado || '[]');
-        const select = modal.querySelector('#edit_tecnico_asignado');
-        Array.from(select.options).forEach(option => {
-            option.selected = tecnicosAsignados.includes(option.value);
+function showSection(section) {
+            document.getElementById('section-oficios').classList.add('d-none');
+            document.getElementById('section-usuarios').classList.add('d-none');
+            document.getElementById('section-parroquias').classList.add('d-none');
+            document.getElementById('section-' + section).classList.remove('d-none');
+            document.querySelectorAll('.sidebar .nav-link').forEach(link => link.classList.remove('active'));
+            if (section === 'oficios') {
+                document.querySelector('.sidebar .nav-link[href="#"]').classList.add('active');
+            } else if (section === 'usuarios') {
+                document.querySelectorAll('.sidebar .nav-link')[1].classList.add('active');
+            } else if (section === 'parroquias') {
+                document.querySelectorAll('.sidebar .nav-link')[2].classList.add('active');
+            }
+        }
+        showSection('oficios');
+function showSection(section) {
+    document.querySelectorAll('.card-section').forEach(function(card) {
+        card.classList.add('d-none');
+        card.classList.remove('active');
+    });
+    var target = document.getElementById('section-' + section);
+    if (target) {
+        target.classList.remove('d-none');
+        target.classList.add('active');
+    }
+    document.querySelectorAll('.nav-link').forEach(function(link) {
+        link.classList.remove('active');
+    });
+    document.querySelectorAll('.nav-link').forEach(function(link) {
+        if (link.getAttribute('onclick') && link.getAttribute('onclick').includes(section)) {
+            link.classList.add('active');
+        }
+    });
+}
+function actualizarNotificaciones() {
+    fetch('{{ url_for("notificaciones_count") }}')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('notificationCount').textContent = data.count;
         });
+}
 
-        modal.querySelector('#edit_tipo_asesoria').value = this.dataset.tipoAsesoria || 'Ninguno';
+actualizarNotificaciones();
+document.querySelectorAll('form.tecnico-form').forEach(form => {
+    form.addEventListener('submit', function() {
+        setTimeout(actualizarNotificaciones, 1000);
     });
 });
 
+function enableEdit(id) {
+    document.getElementById('input-tipo-' + id).removeAttribute('readonly');
+    document.getElementById('input-tipo-' + id).focus();
+    document.getElementById('save-tipo-' + id).classList.remove('d-none');
+}

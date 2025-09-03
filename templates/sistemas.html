@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Sistemas - Gestión de Inventarios</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Inventario Conagopare</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    {% if session.role == 'sistemas' or session.role == 'admin' %}
+                    <li class="nav-item">
+                        <a class="nav-link active" id="tab-add-product" onclick="showPanel('add-product')"
+                            href="#">Agregar Producto</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="tab-inventory" onclick="showPanel('inventory')" href="#">Inventario</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="tab-technicians" onclick="showPanel('technicians')"
+                            href="#">Técnicos</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" id="tab-reports" onclick="showPanel('reports')" href="#">Reportes</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown d-flex align-items-center">
+                        <i class="bi bi-person-circle fs-4 me-2 text-white"></i>
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button"
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                            {{ session.full_name | default(session.user, true) }} - {{ session.user }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                            <li><a class="dropdown-item" href="#" data-bs-toggle="modal"
+                                    data-bs-target="#changePasswordModal">Cambiar Contraseña</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">Cerrar Sesión</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container main-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div id="panel-add-product" class="fade-panel active">
+            <div class="card">
+                <div class="card-header">Agregar Nuevo Producto</div>
+                <div class="card-body">
+                    <form id="addProductForm" method="POST" action="{{ url_for('sistemas') }}"
+                        enctype="multipart/form-data">
+                        <input type="hidden" name="add_product" value="true">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="codigo" class="form-label">Código</label>
+                                <input type="text" class="form-control" id="codigo" name="codigo" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="tipo" class="form-label">Tipo</label>
+                                <select class="form-select" id="tipo" name="tipo" required>
+                                    <option value="" disabled selected>Seleccione un tipo</option>
+                                    <option value="PC">PC</option>
+                                    <option value="Laptop">Laptop</option>
+                                    <option value="Monitor">Monitor</option>
+                                    <option value="Impresora">Impresora</option>
+                                    <option value="Otro">Otro</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="color" class="form-label">Color</label>
+                                <input type="text" class="form-control" id="color" name="color" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="marca" class="form-label">Marca</label>
+                                <input type="text" class="form-control" id="marca" name="marca" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="modelo" class="form-label">Modelo</label>
+                                <input type="text" class="form-control" id="modelo" name="modelo" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="estado" class="form-label">Estado</label>
+                                <select class="form-select" id="estado" name="estado" required>
+                                    <option value="" disabled selected>Seleccione un estado</option>
+                                    <option value="Operativo">Operativo</option>
+                                    <option value="En mantenimiento">En mantenimiento</option>
+                                    <option value="Dar de baja">Dar de baja</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="detalle" class="form-label">Detalle</label>
+                                <textarea class="form-control" id="detalle" name="detalle" rows="3"></textarea>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="asignar_tecnico" class="form-label">¿Asignar Técnico?</label>
+                                <select class="form-select" id="asignar_tecnico" name="asignar_tecnico">
+                                    <option value="no" selected>No</option>
+                                    <option value="sí">Sí</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3" id="tecnico_container" style="display: none;">
+                                <label for="tecnico" class="form-label">Técnico Asignado</label>
+                                <select class="form-select" id="tecnico" name="tecnico">
+                                    <option value="" disabled selected>Seleccione un técnico</option>
+                                    {% for tecnico in tecnicos %}
+                                    <option value="{{ tecnico.username }}">{{ tecnico.nombre }} {{ tecnico.apellido }} -
+                                        {{ tecnico.username }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="imagen" class="form-label">Imagen (Opcional)</label>
+                                <input type="file" class="form-control" id="imagen" name="imagen" accept="image/*">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-success mt-3">Agregar Producto</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div id="panel-inventory" class="fade-panel">
+            <div class="card">
+                <div class="card-header">Filtrar Inventario</div>
+                <div class="card-body">
+                    <h6 class="card-title">Filtrar Productos</h6>
+                    <form id="filterForm">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="filterTecnico" class="form-label">Técnico</label>
+                                <select class="form-select" id="filterTecnico">
+                                    <option value="">Todos los técnicos</option>
+                                    {% for tecnico in tecnicos %}
+                                    <option value="{{ tecnico.username }}">{{ tecnico.nombre }} {{ tecnico.apellido }} -
+                                        {{ tecnico.username }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="filterTipo" class="form-label">Tipo</label>
+                                <select class="form-select" id="filterTipo">
+                                    <option value="">Todos los tipos</option>
+                                    <option value="PC">PC</option>
+                                    <option value="Laptop">Laptop</option>
+                                    <option value="Monitor">Monitor</option>
+                                    <option value="Impresora">Impresora</option>
+                                    <option value="Otro">Otro</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="filterSearch" class="form-label">Búsqueda General</label>
+                                <input type="text" class="form-control" id="filterSearch"
+                                    placeholder="Código, Marca, Modelo...">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">Inventario de Productos</div>
+                <div class="card-body">
+                    <p class="text-muted">Número de productos registrados: {{ inventarios|length }}</p>
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="inventoryTable">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Tipo</th>
+                                    <th>Color</th>
+                                    <th>Marca</th>
+                                    <th>Modelo</th>
+                                    <th>Estado</th>
+                                    <th>Detalle</th>
+                                    <th>Técnico</th>
+                                    <th>Imagen</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in inventarios %}
+                                <tr data-tecnico="{{ product.tecnico|lower or '' }}"
+                                    data-tipo="{{ product.tipo|lower }}"
+                                    data-search="{{ product.codigo|lower }} {{ product.marca|lower }} {{ product.modelo|lower }} {{ product.detalle|lower or '' }}">
+                                    <td>{{ product.codigo }}</td>
+                                    <td>{{ product.tipo }}</td>
+                                    <td>{{ product.color }}</td>
+                                    <td>{{ product.marca }}</td>
+                                    <td>{{ product.modelo }}</td>
+                                    <td>{{ product.estado }}</td>
+                                    <td>{{ product.detalle or 'N/A' }}</td>
+                                    <td>{{ product.tecnico or 'N/A' }}</td>
+                                    <td>
+                                        {% if product.imagen %}
+                                        <img src="{{ url_for('static', filename='uploads/' + product.imagen) }}"
+                                            alt="{{ product.codigo }}" class="product-img">
+                                        {% else %}
+                                        Sin imagen
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary edit-btn" data-bs-toggle="modal"
+                                            data-bs-target="#editModal" data-id="{{ product._id }}"
+                                            data-codigo="{{ product.codigo }}" data-tipo="{{ product.tipo }}"
+                                            data-color="{{ product.color }}" data-marca="{{ product.marca }}"
+                                            data-modelo="{{ product.modelo }}" data-estado="{{ product.estado }}"
+                                            data-detalle="{{ product.detalle or '' }}"
+                                            data-tecnico="{{ product.tecnico or '' }}"
+                                            data-imagen="{{ product.imagen or '' }}">Editar</button>
+                                        <form method="POST" action="{{ url_for('sistemas') }}" style="display:inline;">
+                                            <input type="hidden" name="product_id" value="{{ product._id }}">
+                                            <input type="hidden" name="delete_product" value="true">
+                                            <button type="submit" class="btn btn-sm btn-danger"
+                                                onclick="return confirm('¿Está seguro de eliminar este producto?')">Eliminar</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% if not inventarios %}
+                                <tr>
+                                    <td colspan="10" class="text-center">Sin productos registrados.</td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="panel-technicians" class="fade-panel">
+            <div class="card">
+                <div class="card-header">Lista de Técnicos</div>
+                <div class="card-body">
+                    <p class="text-muted">Número de técnicos registrados: {{ tecnicos|length }}</p>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Apellido</th>
+                                    <th>Usuario</th>
+                                    <th>Productos Asignados</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for tecnico in tecnicos %}
+                                <tr>
+                                    <td>{{ tecnico.nombre or 'N/A' }}</td>
+                                    <td>{{ tecnico.apellido or 'N/A' }}</td>
+                                    <td>{{ tecnico.username }}</td>
+                                    <td>
+                                        {% set count = namespace(value=0) %}
+                                        {% for product in inventarios %}
+                                        {% if product.tecnico == tecnico.username %}
+                                        {% set count.value = count.value + 1 %}
+                                        {% endif %}
+                                        {% endfor %}
+                                        {{ count.value }}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% if not tecnicos %}
+                                <tr>
+                                    <td colspan="4" class="text-center">Sin técnicos registrados.</td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="panel-reports" class="fade-panel">
+            <div class="card">
+                <div class="card-header">Reporte de Técnicos y Productos Asignados</div>
+                <div class="card-body">
+                    <p class="text-muted">Número de técnicos con productos asignados: {{ tecnicos|length }}</p>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Apellido</th>
+                                    <th>Usuario</th>
+                                    <th>Productos Asignados</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for tecnico in tecnicos %}
+                                <tr>
+                                    <td>{{ tecnico.nombre or 'N/A' }}</td>
+                                    <td>{{ tecnico.apellido or 'N/A' }}</td>
+                                    <td>{{ tecnico.username }}</td>
+                                    <td>
+                                        {% set assigned_products = inventarios | selectattr('tecnico', 'equalto',
+                                        tecnico.username) | list %}
+                                        {% if assigned_products %}
+                                        <ul class="list-unstyled mb-0">
+                                            {% for product in assigned_products %}
+                                            <li>{{ product.codigo }} ({{ product.tipo }}, {{ product.marca }}, {{
+                                                product.modelo }}) - {{ product.estado }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                        <span class="text-muted">Total: {{ assigned_products|length }}</span>
+                                        {% else %}
+                                        Sin productos asignados
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% if not tecnicos %}
+                                <tr>
+                                    <td colspan="4" class="text-center">Sin técnicos registrados.</td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+        </div>
+
+        <!-- Product Status Summary -->
+        <div class="card mt-3">
+            <div class="card-header">Resumen de Estado de Productos</div>
+            <div class="card-body">
+                <p class="text-muted">Resumen del estado de todos los productos registrados: {{ inventarios|length }}
+                </p>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Estado</th>
+                                <th>Cantidad</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set estados = ['Operativo', 'En mantenimiento', 'Dar de baja'] %}
+                            {% for estado in estados %}
+                            {% set count = inventarios | selectattr('estado', 'equalto', estado) | list | length %}
+                            <tr>
+                                <td>{{ estado }}</td>
+                                <td>{{ count }}</td>
+                            </tr>
+                            {% endfor %}
+                            {% if not inventarios %}
+                            <tr>
+                                <td colspan="2" class="text-center">Sin productos registrados.</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editModalLabel">Editar Producto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editProductForm" method="POST" action="{{ url_for('sistemas') }}"
+                        enctype="multipart/form-data">
+                        <input type="hidden" name="edit_product" value="true">
+                        <input type="hidden" id="edit_product_id" name="product_id">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="edit_codigo" class="form-label">Código</label>
+                                <input type="text" class="form-control" id="edit_codigo" name="codigo" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="edit_tipo" class="form-label">Tipo</label>
+                                <select class="form-select" id="edit_tipo" name="tipo" required>
+                                    <option value="" disabled>Seleccione un tipo</option>
+                                    <option value="PC">PC</option>
+                                    <option value="Laptop">Laptop</option>
+                                    <option value="Monitor">Monitor</option>
+                                    <option value="Impresora">Impresora</option>
+                                    <option value="Otro">Otro</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="edit_color" class="form-label">Color</label>
+                                <input type="text" class="form-control" id="edit_color" name="color" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="edit_marca" class="form-label">Marca</label>
+                                <input type="text" class="form-control" id="edit_marca" name="marca" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="edit_modelo" class="form-label">Modelo</label>
+                                <input type="text" class="form-control" id="edit_modelo" name="modelo" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="edit_estado" class="form-label">Estado</label>
+                                <select class="form-select" id="edit_estado" name="estado" required>
+                                    <option value="" disabled>Seleccione un estado</option>
+                                    <option value="Operativo">Operativo</option>
+                                    <option value="En mantenimiento">En mantenimiento</option>
+                                    <option value="Dar de baja">Dar de baja</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="edit_detalle" class="form-label">Detalle</label>
+                                <textarea class="form-control" id="edit_detalle" name="detalle" rows="3"></textarea>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="edit_asignar_tecnico" class="form-label">¿Asignar Técnico?</label>
+                                <select class="form-select" id="edit_asignar_tecnico" name="asignar_tecnico">
+                                    <option value="no">No</option>
+                                    <option value="sí">Sí</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3" id="edit_tecnico_container" style="display: none;">
+                                <label for="edit_tecnico" class="form-label">Técnico Asignado</label>
+                                <select class="form-select" id="edit_tecnico" name="tecnico">
+                                    <option value="" disabled selected>Seleccione un técnico</option>
+                                    {% for tecnico in tecnicos %}
+                                    <option value="{{ tecnico.username }}">{{ tecnico.nombre }} {{ tecnico.apellido }} -
+                                        {{ tecnico.username }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="edit_imagen" class="form-label">Imagen (Opcional)</label>
+                                <input type="file" class="form-control" id="edit_imagen" name="imagen" accept="image/*">
+                                <small>Imagen actual: <span id="current_imagen"></span></small>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-success mt-3">Guardar Cambios</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="changePasswordModalLabel">Cambiar Contraseña</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST" action="{{ url_for('change_password') }}">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="old_password" class="form-label">Contraseña Anterior</label>
+                                <input type="password" class="form-control" id="old_password" name="old_password"
+                                    required>
+                            </div>
+                            <div class="col-12">
+                                <label for="new_password" class="form-label">Nueva Contraseña</label>
+                                <input type="password" class="form-control" id="new_password" name="new_password"
+                                    required>
+                            </div>
+                            <div class="col-12">
+                                <label for="confirm_password" class="form-label">Confirmar Nueva Contraseña</label>
+                                <input type="password" class="form-control" id="confirm_password"
+                                    name="confirm_password" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-success mt-3">Guardar</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+
+</html>

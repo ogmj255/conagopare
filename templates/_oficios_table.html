@@ -1,0 +1,46 @@
+<div class="table-responsive">
+    <table class="table table-striped">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Número Oficio</th>
+            <th>Estado</th>
+            <th>Técnico</th>
+            <th>Sub-Estado</th>
+            <th>Fecha Recibido</th>
+            <th>Fecha Enviado</th>
+            <th>Fecha Designación</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for oficio in oficios %}
+        <tr>
+            <td>{{ oficio.id_secuencial }}</td>
+            <td>{{ oficio.numero_oficio }}</td>
+            <td>{{ oficio.estado }}</td>
+            <td>
+                {% if oficio.assignments %}
+                {% for a in oficio.assignments %}
+                {{ a.tecnico }}{% if not loop.last %}, {% endif %}
+                {% endfor %}
+                {% else %}
+                Pendiente
+                {% endif %}
+            </td>
+            <td>{{ oficio.sub_estado or 'N/A' }}</td>
+            <td>{{ oficio.fecha_recibido_formatted }}</td>
+            <td>{{ oficio.fecha_enviado_formatted }}</td>
+            <td>{{ oficio.fecha_designacion_formatted or 'N/A' }}</td>
+            <td>
+                <a href="#">Editar</a>
+                <a href="#">Eliminar</a>
+            </td>
+        </tr>
+        {% endfor %}
+        {% if not oficios %}
+        <tr><td colspan="9">Sin oficios registrados.</td></tr>
+        {% endif %}
+    </tbody>
+</table>
+</div>

@@ -101,11 +101,6 @@ body {
     transition: transform 0.3s, box-shadow 0.3s;
 }
 
-.card:hover,
-.login-card:hover {
-    transform: translateY(-6px);
-    box-shadow: 0 10px 32px rgba(30, 64, 175, 0.15), 0 3px 12px rgba(0, 0, 0, 0.1);
-}
 
 .card-header {
     background: linear-gradient(to right, #f3f4f6, #e2e8f0);
@@ -414,3 +409,59 @@ body {
     background: #1e3a8a !important;
     color: #ffffff;
 }
+.product-img {
+    max-width: 100px;
+    max-height: 100px;
+    object-fit: cover;
+}
+
+.modal.fade .modal-dialog {
+    transition: transform 0.3s ease-out !important;
+    transform: translate(0, -50px);
+}
+
+.modal.show .modal-dialog {
+    transform: translate(0, 0) !important;
+}
+
+.modal-backdrop {
+    transition: opacity 0.3s ease-in-out !important;
+}
+
+.modal {
+    z-index: 1055 !important;
+}
+
+.modal-backdrop {
+    z-index: 1050 !important;
+}
+
+/* Fallback para deshabilitar animaciones si es necesario */
+.no-animations .modal.fade .modal-dialog {
+    transition: none !important;
+    transform: none !important;
+}
+
+.no-animations .modal-backdrop {
+    transition: none !important;
+}
+/* Estilos para las alertas */
+.alert {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1060;
+    min-width: 300px;
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-20px); }
+}
+

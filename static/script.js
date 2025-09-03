@@ -1,17 +1,14 @@
 document.addEventListener('DOMContentLoaded', function () {
     console.log('DOM fully loaded');
 
-    // Function to toggle sections in admin.html
     function showSection(sectionId) {
         console.log('showSection called with sectionId:', sectionId);
 
-        // Remove active class from all sections and hide them
         document.querySelectorAll('.card-section').forEach(section => {
             section.classList.remove('active');
             section.classList.add('d-none');
         });
 
-        // Add active class to the selected section and show it
         const targetSection = document.getElementById(`section-${sectionId}`);
         if (targetSection) {
             targetSection.classList.remove('d-none');
@@ -21,7 +18,6 @@ document.addEventListener('DOMContentLoaded', function () {
             console.error(`Section with ID section-${sectionId} not found`);
         }
 
-        // Update active nav-link
         document.querySelectorAll('.nav-link').forEach(link => {
             link.classList.remove('active');
         });
@@ -33,7 +29,6 @@ document.addEventListener('DOMContentLoaded', function () {
         localStorage.setItem('currentSection', sectionId);
     }
 
-    // Function to toggle panels in design.html and tecnico.html
     function showPanel(panelId) {
         document.querySelectorAll('.fade-panel').forEach(panel => panel.classList.remove('active'));
         document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
@@ -45,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         localStorage.setItem('currentPanel', panelId);
     }
-    // Panel switching logic
+   
     function showPanel(panelId) {
         document.querySelectorAll('.fade-panel').forEach(panel => {
             panel.classList.remove('active');
@@ -57,11 +52,10 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById(`tab-${panelId}`).classList.add('active');
     }
 
-    // Expose showSection and showPanel to global scope for onclick handlers
+   
     window.showSection = showSection;
     window.showPanel = showPanel;
 
-    // Async function to update canton in receive.html
     async function updateCanton() {
         const parroquia = document.getElementById('gad_parroquial')?.value;
         if (parroquia) {
@@ -83,7 +77,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Async function to update canton in edit modal (admin.html, design.html)
     async function updateCantonEdit() {
         const parroquia = document.getElementById('edit_gad_parroquial')?.value;
         if (parroquia) {
@@ -105,10 +98,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Expose updateCantonEdit to global scope
     window.updateCantonEdit = updateCantonEdit;
 
-    // Function to add technician-asesoria pair
     function addTechnicianPair(container, selectedTechnician = '', selectedAdvisory = '') {
         const tecnicoOptions = Array.from(document.querySelectorAll('#tecnico-options option'))
             .map(opt => `<option value="${opt.value}" ${selectedTechnician === opt.value ? 'selected' : ''}>${opt.text}</option>`)
@@ -146,7 +137,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Function to toggle entrega fields in tecnico.html
     function toggleEntregaFields(oficioId) {
         const entregaRecepcion = document.getElementById(`entrega_recepcion_${oficioId}`);
         if (entregaRecepcion) {
@@ -157,10 +147,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Expose toggleEntregaFields to global scope
     window.toggleEntregaFields = toggleEntregaFields;
 
-    // Async function to fetch notifications
     async function fetchNotifications() {
         try {
             const response = await fetch('/get_notifications');
@@ -191,7 +179,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Async function to clear notifications
     async function clearNotifications() {
         try {
             const response = await fetch('/clear_notifications', {
@@ -212,7 +199,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Initialize static modals
     const staticModals = ['#editModal', '#confirmModal', '#changePasswordModal'];
     staticModals.forEach(selector => {
         const modal = document.querySelector(selector);
@@ -224,7 +210,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Handle entregar buttons for tecnico.html
     document.querySelectorAll('.entregar-btn').forEach(button => {
         const modalId = button.getAttribute('data-modal-id') || `confirmEntregarModal_${button.getAttribute('data-id')}`;
         button.addEventListener('click', () => {
@@ -242,7 +227,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // Handle edit modal for admin.html and design.html
     document.querySelectorAll('.edit-btn').forEach(button => {
         button.addEventListener('click', function () {
             const id = button.getAttribute('data-id');
@@ -255,7 +239,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
             console.log('Edit button clicked for oficio:', id);
 
-            // Populate modal fields
             document.getElementById('edit_oficio_id').value = id;
             document.getElementById('edit_fecha_enviado').value = fechaEnviado;
             document.getElementById('edit_numero_oficio').value = numeroOficio;
@@ -263,21 +246,18 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('edit_canton').value = canton;
             document.getElementById('edit_detalle').value = detalle;
 
-            // Populate assignments
             const pairContainer = document.getElementById('edit_tecnico_asesoria_pairs');
             pairContainer.innerHTML = '';
             assignments.forEach(assignment => {
                 addTechnicianPair(pairContainer, assignment.tecnico, assignment.tipo_asesoria);
             });
 
-            // Ensure at least one pair exists
             if (assignments.length === 0) {
                 addTechnicianPair(pairContainer);
             }
         });
     });
 
-    // Add technician pair for edit modal
     document.querySelectorAll('.add-pair').forEach(button => {
         button.addEventListener('click', function () {
             const pairContainer = document.getElementById('edit_tecnico_asesoria_pairs');
@@ -285,7 +265,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // Add technician pair for design.html
     document.querySelectorAll('.add-pair').forEach(button => {
         button.addEventListener('click', () => {
             const oficioId = button.getAttribute('data-oficio-id');
@@ -296,7 +275,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // Enable edit for tipos_asesoria in admin.html
     window.enableEdit = function (tipoId) {
         const input = document.getElementById(`input-tipo-${tipoId}`);
         const saveButton = document.getElementById(`save-tipo-${tipoId}`);
@@ -305,7 +283,6 @@ document.addEventListener('DOMContentLoaded', function () {
         saveButton.classList.remove('d-none');
     };
 
-    // Register form for receive.html
     const registerForm = document.getElementById('registerForm');
     if (registerForm) {
         registerForm.addEventListener('submit', function (e) {
@@ -334,7 +311,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Filter functionality for receive.html
     const filterId = document.getElementById('filterId');
     const filterFecha = document.getElementById('filterFecha');
     const filterCanton = document.getElementById('filterCanton');
@@ -374,7 +350,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (filterGad) filterGad.addEventListener('change', applyReceiveFilters);
     if (filterNumeroOficio) filterNumeroOficio.addEventListener('input', applyReceiveFilters);
 
-    // Filter functionality for design.html
     const filterIdDesign = document.getElementById('filterIdDesign');
     const filterNumeroOficioDesign = document.getElementById('filterNumeroOficioDesign');
     const filterTecnicoDesign = document.getElementById('filterTecnicoDesign');
@@ -430,7 +405,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (filterTipoAsesoriaDesign) filterTipoAsesoriaDesign.addEventListener('change', applyDesignFilters);
     if (filterFechaDesign) filterFechaDesign.addEventListener('change', applyDesignFilters);
 
-    // Handle flashes
     const flashes = document.querySelectorAll('.alert');
     flashes.forEach((flash, index) => {
         flash.style.top = `${20 + (index * 80)}px`;
@@ -440,7 +414,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 3000);
     });
 
-    // Initialize filters based on page
     if (filterId || filterFecha || filterCanton || filterGad || filterNumeroOficio) {
         applyReceiveFilters();
     }
@@ -448,12 +421,11 @@ document.addEventListener('DOMContentLoaded', function () {
         applyDesignFilters();
     }
 
-    // Initialize default section or panel
     const currentSection = localStorage.getItem('currentSection');
     if (currentSection && document.getElementById(`section-${currentSection}`)) {
         showSection(currentSection);
     } else {
-        showSection('oficios'); // Default to 'oficios' for admin.html
+        showSection('oficios');
     }
 
     const currentPanel = localStorage.getItem('currentPanel');
@@ -463,11 +435,9 @@ document.addEventListener('DOMContentLoaded', function () {
         showPanel('asignados');
     }
 
-    // Initialize notifications
     fetchNotifications();
     setInterval(fetchNotifications, 10000);
 
-    // Clear notifications
     const clearNotificationsBtn = document.getElementById('clearNotifications');
     if (clearNotificationsBtn) {
         clearNotificationsBtn.addEventListener('click', clearNotifications);
@@ -485,7 +455,7 @@ document.addEventListener('DOMContentLoaded', function () {
             tecnicoSelect.value = '';
         }
     });
-    // Technician toggle for Add Product form
+
     document.getElementById('asignar_tecnico').addEventListener('change', function () {
         const tecnicoContainer = document.getElementById('tecnico_container');
         const tecnicoSelect = document.getElementById('tecnico');
@@ -498,7 +468,7 @@ document.addEventListener('DOMContentLoaded', function () {
             tecnicoSelect.value = '';
         }
     });
-    // Technician toggle for Edit Product modal
+
     document.getElementById('edit_asignar_tecnico').addEventListener('change', function () {
         const tecnicoContainer = document.getElementById('edit_tecnico_container');
         const tecnicoSelect = document.getElementById('edit_tecnico');
@@ -511,7 +481,7 @@ document.addEventListener('DOMContentLoaded', function () {
             tecnicoSelect.value = '';
         }
     });
-    // Populate Edit Modal with product data
+
     document.querySelectorAll('.edit-btn').forEach(button => {
         button.addEventListener('click', function () {
             const modal = document.getElementById('editModal');
@@ -530,7 +500,7 @@ document.addEventListener('DOMContentLoaded', function () {
             modal.querySelector('#current_imagen').textContent = this.dataset.imagen || 'Sin imagen';
         });
     });
-    // Filter inventory table
+    
     document.getElementById('filterTecnico').addEventListener('change', filterTable);
     document.getElementById('filterTipo').addEventListener('change', filterTable);
     document.getElementById('filterSearch').addEventListener('input', filterTable);

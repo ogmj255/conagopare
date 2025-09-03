@@ -134,8 +134,6 @@ def change_password():
     
     return redirect(url_for('index'))
 
-
-
 @app.route('/get_notifications', methods=['GET'])
 def get_notifications():
     try:
@@ -743,4 +741,4 @@ def sistemas():
     return render_template('sistemas.html', inventarios=inventarios, tecnicos=tecnicos)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=10000)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)), debug=True)

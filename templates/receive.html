@@ -109,27 +109,17 @@
                             <h6>Filtrar Registros</h6>
                             <div class="row g-2">
                                 <div class="col-md-3">
-                                    <input type="text" class="form-control" id="filterId"
-                                        placeholder="ID Secuencial (ej. 2025-0001)">
-                                </div>
-                                <div class="col-md-3">
-                                    <input type="date" class="form-control" id="filterFecha"
-                                        placeholder="Fecha Enviado">
-                                </div>
-                                <div class="col-md-3">
-                                    <input type="text" class="form-control" id="filterCanton" placeholder="Cantón">
-                                </div>
-                                <div class="col-md-3">
-                                    <select class="form-select" id="filterGad">
-                                        <option value="">Todos los GADs</option>
-                                        {% for parroquia in parroquias %}
-                                        <option value="{{ parroquia.parroquia }}">{{ parroquia.parroquia }}</option>
-                                        {% endfor %}
+                                    <select class="form-select" id="filterField">
+                                        <option value="id">ID Secuencial</option>
+                                        <option value="fecha">Fecha Enviado</option>
+                                        <option value="canton">Cantón</option>
+                                        <option value="gad">GAD Parroquial</option>
+                                        <option value="numero">Número de Oficio</option>
                                     </select>
                                 </div>
-                                <div class="col-md-3">
-                                    <input type="text" class="form-control" id="filterNumeroOficio"
-                                        placeholder="Número de Oficio">
+                                <div class="col-md-6">
+                                    <input type="text" class="form-control" id="filterValue"
+                                        placeholder="Ingrese valor de búsqueda">
                                 </div>
                             </div>
                         </div>
@@ -150,7 +140,7 @@
                                 </thead>
                                 <tbody>
                                     {% for oficio in historial %}
-                                    <tr data-id="{{ oficio.id_secuencial }}"
+                                    <tr data-id="{{ oficio.id_secuencial }}" data-mongoid="{{ oficio._id }}"
                                         data-fecha="{{ oficio.fecha_enviado_formatted }}"
                                         data-canton="{{ oficio.canton|lower }}"
                                         data-gad="{{ oficio.gad_parroquial|lower }}"
@@ -164,19 +154,23 @@
                                         <td>{{ oficio.fecha_recibido_formatted }}</td>
                                         <td>
                                             <button class="btn btn-sm btn-primary edit-btn" data-bs-toggle="modal"
-                                                data-bs-target="#editModal" data-id="{{ oficio.id_secuencial }}"
+                                                data-bs-target="#editModal" data-id="{{ oficio._id }}"
                                                 data-fecha-enviado="{{ oficio.fecha_enviado }}"
                                                 data-numero-oficio="{{ oficio.numero_oficio }}"
                                                 data-gad-parroquial="{{ oficio.gad_parroquial }}"
-                                                data-canton="{{ oficio.canton }}"
-                                                data-detalle="{{ oficio.detalle }}">Editar</button>
+                                                data-canton="{{ oficio.canton }}" data-detalle="{{ oficio.detalle }}"
+                                                data-assignments="{{ oficio.assignments | tojson }}">
+                                                <i class="bi bi-pencil-square"></i>
+                                            </button>
                                             <form method="POST" action="{{ url_for('receive') }}"
                                                 style="display:inline;">
-                                                <input type="hidden" name="delete_oficio"
-                                                    value="{{ oficio.id_secuencial }}">
+                                                <input type="hidden" name="delete_oficio" value="{{ oficio._id }}">
                                                 <button type="submit" class="btn btn-sm btn-danger"
-                                                    onclick="return confirm('¿Estás seguro de eliminar este oficio?')">Eliminar</button>
+                                                    onclick="return confirm('¿Estás seguro de eliminar este oficio?')">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
                                             </form>
+
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -230,7 +224,6 @@
                                 <label for="edit_detalle" class="form-label">Detalle</label>
                                 <textarea class="form-control" id="edit_detalle" name="detalle" rows="4"></textarea>
                             </div>
-                            <button type="submit" class="btn btn-success">Guardar</button>
                         </form>
                     </div>
                 </div>

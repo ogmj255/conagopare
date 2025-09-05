@@ -136,35 +136,34 @@ def change_password():
 
 @app.route('/get_notifications', methods=['GET'])
 def get_notifications():
-    try:
-        user = session.get('user')
-        if not user:
-            return jsonify({'count': 0, 'notifications': []})
-        
-        notifs = list(notifications.find({'user': user, 'read': False}).sort('timestamp', -1))
-        for notif in notifs:
-            notif['timestamp'] = format_date(notif['timestamp'])
-        
-        return jsonify({
-            'count': len(notifs),
-            'notifications': notifs
-        })
-    except Exception as e:
-        print(f"Error in get_notifications: {str(e)}")
-        return jsonify({'count': 0, 'notifications': [], 'error': str(e)}), 500
+    if 'user' not in session:
+        return jsonify({'notifications': [], 'count': 0})
+    user_notifications = list(notifications.find({'user': session['user'], 'read': False}))
+    count = len(user_notifications)
+    formatted_notifications = [
+        {
+            'message': n['message'],
+            'timestamp': format_date(n['timestamp'])
+        } for n in user_notifications
+    ]
+    return jsonify({'notifications': formatted_notifications, 'count': count})
 
 @app.route('/clear_notifications', methods=['POST'])
 def clear_notifications():
+    if 'user' not in session:
+        return jsonify({'success': False})
     try:
-        user = session.get('user')
-        if not user:
-            return jsonify({'success': False, 'error': 'No user session'})
-        
-        notifications.delete_many({'user': user})
+        notifications.update_many({'user': session['user'], 'read': False}, {'$set': {'read': True}})
         return jsonify({'success': True})
     except Exception as e:
-        print(f"Error in clear_notifications: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': str(e)})
+@app.route('/notificaciones/count')
+def notificaciones_count():
+    if 'user' not in session:
+        return jsonify({'count': 0})
+    count = notifications.count_documents({'user': session['user'], 'read': False})
+    return jsonify({'count': count})
+
 @app.route('/get_canton', methods=['POST'])
 def get_canton():
     data = request.get_json()
@@ -172,26 +171,44 @@ def get_canton():
     if parroquia:
         parroquia_data = parroquias.find_one({'parroquia': parroquia})
         if parroquia_data:
-            return jsonify({'canton': parroquia_data['canton']})
+            return jsonify({'canton': parroquia_data.get('canton', '')})
     return jsonify({'canton': ''})
+
+def reordenar_ids_secuenciales(year):
+    prefix = f"{year}-"
+    all_in_year = list(oficios.find({'id_secuencial': {'$regex': f"^{re.escape(prefix)}"}}).sort('id_secuencial', 1))
+    for i, doc in enumerate(all_in_year, 1):
+        new_id = f"{prefix}{i:04d}"
+        oficios.update_one({'_id': doc['_id']}, {'$set': {'id_secuencial': new_id}})
 
 @app.route('/receive', methods=['GET', 'POST'])
 def receive():
     if 'user' not in session or session['role'] not in ['receiver', 'admin']:
         return redirect(url_for('login'))
-
+    parroquias_data = list(parroquias.find())
+    if not parroquias_data:
+        flash('No se encontraron parroquias en la base de datos. Contacte al administrador.', 'warning')
+        print("Advertencia: la colección 'parroquias' está vacía.")
+    
+    historial = list(oficios.find().sort('fecha_recibido', -1))
+    for oficio in historial:
+        oficio['_id'] = str(oficio['_id'])
+        oficio['fecha_enviado_formatted'] = format_date(oficio['fecha_enviado'])
+        oficio['fecha_recibido_formatted'] = format_date(oficio['fecha_recibido'])
+    users_list = list(users.find())
+    
     if request.method == 'POST':
         if 'register_oficio' in request.form:
-            fecha_enviado = request.form['fecha_enviado']
-            numero_oficio = request.form['numero_oficio']
-            gad_parroquial = request.form['gad_parroquial']
-            canton = request.form['canton']
-            detalle = request.form['detalle']
+            fecha_enviado = request.form.get('fecha_enviado')
+            numero_oficio = request.form.get('numero_oficio')
+            gad_parroquial = request.form.get('gad_parroquial')
+            canton = request.form.get('canton')
+            detalle = request.form.get('detalle', '')
 
-            if not fecha_enviado or not numero_oficio or not gad_parroquial or not canton:
+            if not all([fecha_enviado, numero_oficio, gad_parroquial, canton]):
                 flash('Todos los campos obligatorios deben completarse.', 'error')
                 return redirect(url_for('receive'))
-            if len(numero_oficio) > 50 or len(detalle) > 500:
+            if len(numero_oficio) > 50 or len(detalle) > 10000:
                 flash('Número de oficio o detalle exceden longitud máxima.', 'error')
                 return redirect(url_for('receive'))
             if not re.match(r'^[A-Za-z0-9\-/]+$', numero_oficio):
@@ -211,53 +228,94 @@ def receive():
                     'canton': canton,
                     'detalle': detalle,
                     'fecha_recibido': datetime.now().isoformat(),
-                    'estado': 'pendiente'
+                    'estado': 'pendiente',
+                    'assignments': [],
+                    'fecha_designacion': None,
+                    'desarrollo_actividad': None,
+                    'fecha_asesoria': None,
+                    'sub_estado': None,
+                    'entrega_recepcion': None
                 }
                 oficios.insert_one(oficio)
+                
+                designers = users.find({'role': 'designer'})
+                for designer in designers:
+                    notifications.insert_one({
+                        'user': designer['username'],
+                        'message': f'Tienes una nueva designación pendiente: Oficio {id_secuencial}',
+                        'timestamp': datetime.now().isoformat(),
+                        'read': False
+                    })
+                
                 flash('Oficio registrado exitosamente', 'success')
             except Exception as e:
                 flash(f'Error al registrar oficio: {str(e)}', 'error')
             return redirect(url_for('receive'))
 
         elif 'edit_oficio' in request.form:
-            oficio_id = request.form['oficio_id']
+            oficio_id = request.form.get('oficio_id')
+            fecha_enviado = request.form.get('fecha_enviado')
+            numero_oficio = request.form.get('numero_oficio')
+            gad_parroquial = request.form.get('gad_parroquial')
+            canton = request.form.get('canton')
+            detalle = request.form.get('detalle', '')
+
+            if not all([oficio_id, fecha_enviado, numero_oficio, gad_parroquial, canton]):
+                flash('Todos los campos obligatorios deben completarse.', 'error')
+                return redirect(url_for('receive'))
+            if len(numero_oficio) > 50 or len(detalle) > 1000:
+                flash('Número de oficio o detalle exceden longitud máxima.', 'error')
+                return redirect(url_for('receive'))
+            if not re.match(r'^[A-Za-z0-9\-/]+$', numero_oficio):
+                flash('Número de oficio solo puede contener letras, números, guiones y barras.', 'error')
+                return redirect(url_for('receive'))
+
             try:
-                oficios.update_one({'_id': ObjectId(oficio_id)}, {
-                    '$set': {
-                        'fecha_enviado': request.form['fecha_enviado'],
-                        'numero_oficio': request.form['numero_oficio'],
-                        'gad_parroquial': request.form['gad_parroquial'],
-                        'canton': request.form['canton'],
-                        'detalle': request.form['detalle']
-                    }
-                })
-                flash('Oficio actualizado exitosamente', 'success')
+                tecnicos = request.form.getlist('tecnico_asignado[]')
+                tipos = request.form.getlist('tipo_asesoria[]')
+                assignments = []
+                for tec, tipo in zip(tecnicos, tipos):
+                    if tec and tipo:
+                        assignments.append({'tecnico': tec, 'tipo_asesoria': tipo})
+
+                result = oficios.update_one(
+                    {'_id': ObjectId(oficio_id)},
+                    {'$set': {
+                        'fecha_enviado': fecha_enviado,
+                        'numero_oficio': numero_oficio,
+                        'gad_parroquial': gad_parroquial,
+                        'canton': canton,
+                        'detalle': detalle,
+                        'assignments': assignments
+                    }}
+                )
+                if result.matched_count == 0:
+                    flash('Oficio no encontrado.', 'error')
+                else:
+                    flash('Oficio actualizado exitosamente', 'success')
             except Exception as e:
                 flash(f'Error al actualizar oficio: {str(e)}', 'error')
-        
+            return redirect(url_for('receive'))
+
         elif 'delete_oficio' in request.form:
-            oficio_id = request.form['delete_oficio']
+            oficio_id = request.form.get('delete_oficio')
             try:
-                oficio = oficios.find_one({'_id': ObjectId(oficio_id)})
-                year = oficio['id_secuencial'].split('-')[0] if oficio and 'id_secuencial' in oficio else None
-
-                oficios.delete_one({'_id': ObjectId(oficio_id)})
-                notifications.delete_many({'oficio_id': ObjectId(oficio_id)})
-                flash('Oficio eliminado exitosamente', 'success')
-
-                if year:
+                deleted_oficio = oficios.find_one({'_id': ObjectId(oficio_id)})
+                if deleted_oficio:
+                    year = deleted_oficio['id_secuencial'].split('-')[0]
+                    oficios.delete_one({'_id': ObjectId(oficio_id)})
                     reordenar_ids_secuenciales(year)
+                    flash('Oficio eliminado exitosamente', 'success')
+                else:
+                    flash('Oficio no encontrado.', 'error')
             except Exception as e:
                 flash(f'Error al eliminar oficio: {str(e)}', 'error')
-    
-    historial = list(oficios.find().sort('fecha_recibido', -1))
-    for oficio in historial:
-        oficio['fecha_enviado_formatted'] = format_date(oficio['fecha_enviado'])
-        oficio['fecha_recibido_formatted'] = format_date(oficio['fecha_recibido'])
-    
-    return render_template('receive.html', 
-        parroquias=list(parroquias.find()),
-        historial=historial)
+            return redirect(url_for('receive'))
+
+    return render_template('receive.html',
+        parroquias=parroquias_data,
+        historial=historial,
+        users=users_list)
 
 @app.route('/design', methods=['GET', 'POST'])
 def design():
@@ -266,11 +324,23 @@ def design():
 
     if request.method == 'POST':
         if 'designar_oficio' in request.form:
-            oficio_id = request.form['oficio_id']
+            oficio_id = request.form.get('oficio_id')
             tecnicos = request.form.getlist('tecnico_asignado[]')
             tipos = request.form.getlist('tipo_asesoria[]')
-            assignments = [{'tecnico': t, 'tipo_asesoria': tipos[i]} for i, t in enumerate(tecnicos) if t]
+
+            if not oficio_id or not tecnicos or not tipos:
+                flash('Debe completar todos los campos requeridos.', 'error')
+                return redirect(url_for('design'))
+            if len(tecnicos) != len(tipos):
+                flash('El número de técnicos y tipos de asesoría no coincide.', 'error')
+                return redirect(url_for('design'))
+            if any(not t or not tipo for t, tipo in zip(tecnicos, tipos)):
+                flash('Seleccione un técnico y tipo de asesoría válidos.', 'error')
+                return redirect(url_for('design'))
+
             try:
+                numero_oficio = request.form.get('numero_oficio', 'Desconocido')
+                assignments = [{'tecnico': t, 'tipo_asesoria': tipos[i]} for i, t in enumerate(tecnicos) if t]
                 oficios.update_one(
                     {'_id': ObjectId(oficio_id)},
                     {
@@ -284,7 +354,7 @@ def design():
                 for assignment in assignments:
                     notifications.insert_one({
                         'user': assignment['tecnico'],
-                        'message': f'Nuevo oficio asignado: {request.form["numero_oficio"]}',
+                        'message': f'Nuevo oficio asignado: {numero_oficio}',
                         'timestamp': datetime.now().isoformat(),
                         'oficio_id': ObjectId(oficio_id),
                         'read': False
@@ -295,18 +365,25 @@ def design():
             return redirect(url_for('design'))
         
         elif 'edit_oficio' in request.form:
-            oficio_id = request.form['oficio_id']
+            oficio_id = request.form.get('oficio_id')
             tecnicos = request.form.getlist('tecnico_asignado[]')
             tipos = request.form.getlist('tipo_asesoria[]')
-            assignments = [{'tecnico': t, 'tipo_asesoria': tipos[i]} for i, t in enumerate(tecnicos) if t]
+
+            if not oficio_id or not tecnicos or not tipos:
+                flash('Debe completar todos los campos requeridos.', 'error')
+                return redirect(url_for('design'))
+            if len(tecnicos) != len(tipos):
+                flash('El número de técnicos y tipos de asesoría no coincide.', 'error')
+                return redirect(url_for('design'))
+            if any(not t or not tipo for t, tipo in zip(tecnicos, tipos)):
+                flash('Seleccione un técnico y tipo de asesoría válidos.', 'error')
+                return redirect(url_for('design'))
+
             try:
+                numero_oficio = request.form.get('numero_oficio', 'Desconocido')
+                assignments = [{'tecnico': t, 'tipo_asesoria': tipos[i]} for i, t in enumerate(tecnicos) if t]
                 oficios.update_one({'_id': ObjectId(oficio_id)}, {
                     '$set': {
-                        'fecha_enviado': request.form['fecha_enviado'],
-                        'numero_oficio': request.form['numero_oficio'],
-                        'gad_parroquial': request.form['gad_parroquial'],
-                        'canton': request.form['canton'],
-                        'detalle': request.form['detalle'],
                         'assignments': assignments,
                         'fecha_designacion': datetime.now().isoformat()
                     }
@@ -315,7 +392,7 @@ def design():
                 for assignment in assignments:
                     notifications.insert_one({
                         'user': assignment['tecnico'],
-                        'message': f'Oficio actualizado: {request.form["numero_oficio"]}',
+                        'message': f'Oficio actualizado: {numero_oficio}',
                         'timestamp': datetime.now().isoformat(),
                         'oficio_id': ObjectId(oficio_id),
                         'read': False
@@ -323,15 +400,17 @@ def design():
                 flash('Oficio actualizado exitosamente', 'success')
             except Exception as e:
                 flash(f'Error al actualizar oficio: {str(e)}', 'error')
+            return redirect(url_for('design'))
         
         elif 'delete_oficio' in request.form:
-            oficio_id = request.form['oficio_id']
+            oficio_id = request.form.get('oficio_id')
             try:
                 oficios.delete_one({'_id': ObjectId(oficio_id)})
                 notifications.delete_many({'oficio_id': ObjectId(oficio_id)})
                 flash('Oficio eliminado exitosamente', 'success')
             except Exception as e:
                 flash(f'Error al eliminar oficio: {str(e)}', 'error')
+            return redirect(url_for('design'))
 
     pendientes = list(oficios.find({'estado': 'pendiente'}).sort('fecha_enviado', -1))
     designados = list(oficios.find({'estado': 'designado'}).sort('fecha_designacion', -1))

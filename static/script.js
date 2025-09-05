@@ -1,3 +1,123 @@
+async function updateCanton() {
+    const parroquia = document.getElementById('gad_parroquial')?.value;
+    if (parroquia) {
+        try {
+            const response = await fetch('/get_canton', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ parroquia })
+            });
+            if (!response.ok) throw new Error('Error en la petición');
+            const data = await response.json();
+            document.getElementById('canton').value = data.canton || '';
+        } catch (error) {
+            document.getElementById('canton').value = '';
+        }
+    } else {
+        document.getElementById('canton').value = '';
+    }
+}
+const flashes = document.querySelectorAll('.alert');
+flashes.forEach((flash, index) => {
+    flash.style.top = `${20 + (index * 80)}px`;
+    setTimeout(() => {
+        flash.style.animation = 'fadeOut 0.5s ease-in-out';
+        setTimeout(() => flash.remove(), 500);
+    }, 3000);
+});
+
+
+async function fetchNotifications() {
+    try {
+        console.log('Fetching notifications...');
+        const response = await fetch('/get_notifications', {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (!response.ok) throw new Error(`Error fetching notifications: ${response.status}`);
+        const data = await response.json();
+        console.log('Notifications data:', data);
+
+        const notificationCount = document.getElementById('notificationCount');
+        const notificationList = document.getElementById('notificationList');
+        if (!notificationCount || !notificationList) {
+            console.error('Notification elements not found in DOM');
+            return;
+        }
+
+        notificationCount.textContent = data.count || 0;
+        notificationList.innerHTML = '';
+        if (data.count === 0 || !data.notifications.length) {
+            notificationList.innerHTML = '<li class="dropdown-item text-muted">No hay notificaciones</li>';
+        } else {
+            data.notifications.forEach(notification => {
+                const li = document.createElement('li');
+                li.className = 'dropdown-item';
+                li.innerHTML = `<strong>${notification.message}</strong><br><small>${notification.timestamp}</small>`;
+                notificationList.appendChild(li);
+            });
+        }
+    } catch (error) {
+        console.error('Error in fetchNotifications:', error);
+        const notificationList = document.getElementById('notificationList');
+        if (notificationList) {
+            notificationList.innerHTML = '<li class="dropdown-item text-danger">Error al cargar notificaciones</li>';
+        }
+    }
+}
+
+async function clearNotifications() {
+    try {
+        console.log('Clearing notifications...');
+        const response = await fetch('/clear_notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        console.log('Clear notifications response:', data);
+        if (data.success) {
+            await fetchNotifications();
+        } else {
+            console.error('Error clearing notifications:', data.error);
+        }
+    } catch (error) {
+        console.error('Error in clearNotifications:', error);
+    }
+}
+
+function handleFlashes() {
+    const flashes = document.querySelectorAll('.alert');
+    flashes.forEach((flash, index) => {
+        flash.style.top = `${20 + (index * 80)}px`;
+        flash.style.animation = 'fadeIn 0.5s ease-in-out';
+        setTimeout(() => {
+            flash.style.animation = 'fadeOut 0.5s ease-in-out';
+            setTimeout(() => flash.remove(), 500);
+        }, 3500);
+    });
+}
+async function clearNotifications() {
+        try {
+            const response = await fetch('/clear_notifications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+            if (data.success) {
+                fetchNotifications();
+            } else {
+                console.error('Error clearing notifications:', data.error);
+            }
+        } catch (error) {
+            console.error('Error clearing notifications:', error);
+        }
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchNotifications();
+        setInterval(fetchNotifications, 10000);
+    });
+
+
 document.addEventListener('DOMContentLoaded', function () {
     console.log('DOM fully loaded');
 
@@ -40,7 +160,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         localStorage.setItem('currentPanel', panelId);
     }
-   
+
     function showPanel(panelId) {
         document.querySelectorAll('.fade-panel').forEach(panel => {
             panel.classList.remove('active');
@@ -52,30 +172,10 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById(`tab-${panelId}`).classList.add('active');
     }
 
-   
+
     window.showSection = showSection;
     window.showPanel = showPanel;
 
-    async function updateCanton() {
-        const parroquia = document.getElementById('gad_parroquial')?.value;
-        if (parroquia) {
-            try {
-                const response = await fetch('/get_canton', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ parroquia })
-                });
-                if (!response.ok) throw new Error('Error fetching canton');
-                const data = await response.json();
-                document.getElementById('canton').value = data.canton || '';
-            } catch (error) {
-                console.error('Error in updateCanton:', error);
-                document.getElementById('canton').value = '';
-            }
-        } else {
-            document.getElementById('canton').value = '';
-        }
-    }
 
     async function updateCantonEdit() {
         const parroquia = document.getElementById('edit_gad_parroquial')?.value;
@@ -152,53 +252,27 @@ document.addEventListener('DOMContentLoaded', function () {
     async function fetchNotifications() {
         try {
             const response = await fetch('/get_notifications');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
             const data = await response.json();
             const notificationCount = document.getElementById('notificationCount');
             const notificationList = document.getElementById('notificationList');
-            if (notificationCount && notificationList) {
-                notificationCount.textContent = data.count || 0;
-                notificationList.innerHTML = '';
-                if (data.count === 0) {
-                    notificationList.innerHTML = '<li class="dropdown-item text-muted">No hay notificaciones</li>';
-                } else {
-                    data.notifications.forEach(notification => {
-                        const li = document.createElement('li');
-                        li.className = 'dropdown-item';
-                        li.innerHTML = `<strong>${notification.message}</strong><br><small>${notification.timestamp}</small>`;
-                        notificationList.appendChild(li);
-                    });
-                }
+            notificationCount.textContent = data.count;
+            notificationList.innerHTML = '';
+            if (data.count === 0) {
+                notificationList.innerHTML = '<li class="dropdown-item text-muted">No hay notificaciones</li>';
             } else {
-                console.warn('Notification elements not found in DOM');
+                data.notifications.forEach(notification => {
+                    const li = document.createElement('li');
+                    li.className = 'dropdown-item';
+                    li.innerHTML = `<strong>${notification.message}</strong><br><small>${notification.timestamp}</small>`;
+                    notificationList.appendChild(li);
+                });
             }
         } catch (error) {
             console.error('Error fetching notifications:', error);
         }
     }
 
-    async function clearNotifications() {
-        try {
-            const response = await fetch('/clear_notifications', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            if (data.success) {
-                await fetchNotifications();
-            } else {
-                console.error('Error clearing notifications:', data.error);
-            }
-        } catch (error) {
-            console.error('Error clearing notifications:', error);
-        }
-    }
-
+    
     const staticModals = ['#editModal', '#confirmModal', '#changePasswordModal'];
     staticModals.forEach(selector => {
         const modal = document.querySelector(selector);
@@ -311,37 +385,40 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    const filterId = document.getElementById('filterId');
-    const filterFecha = document.getElementById('filterFecha');
-    const filterCanton = document.getElementById('filterCanton');
-    const filterGad = document.getElementById('filterGad');
-    const filterNumeroOficio = document.getElementById('filterNumeroOficio');
+    const filterField = document.getElementById('filterField');
+    const filterValue = document.getElementById('filterValue');
     const tableRowsReceive = document.querySelectorAll('#historial-registros tbody tr');
 
-    function applyReceiveFilters() {
-        const idValue = filterId?.value.toLowerCase() || '';
-        const fechaValue = filterFecha?.value || '';
-        const cantonValue = filterCanton?.value.toLowerCase() || '';
-        const gadValue = filterGad?.value.toLowerCase() || '';
-        const numeroValue = filterNumeroOficio?.value.toLowerCase() || '';
+    function applyDynamicFilter() {
+        const field = filterField.value;
+        const value = filterValue.value.toLowerCase();
 
         tableRowsReceive.forEach(row => {
-            const id = row.dataset.id?.toLowerCase() || '';
-            const fecha = row.dataset.fecha || '';
-            const canton = row.dataset.canton?.toLowerCase() || '';
-            const gad = row.dataset.gad?.toLowerCase() || '';
-            const numero = row.dataset.numero?.toLowerCase() || '';
-
-            const idMatch = !idValue || id.includes(idValue);
-            const fechaMatch = !fechaValue || (fecha && new Date(fecha).toISOString().split('T')[0] === fechaValue);
-            const cantonMatch = !cantonValue || canton.includes(cantonValue);
-            const gadMatch = !gadValue || gad === gadValue;
-            const numeroMatch = !numeroValue || numero.includes(numeroValue);
-
-            row.style.display = idMatch && fechaMatch && cantonMatch && gadMatch && numeroMatch ? '' : 'none';
+            let rowValue = '';
+            switch (field) {
+                case 'id':
+                    rowValue = row.dataset.id?.toLowerCase() || '';
+                    break;
+                case 'fecha':
+                    rowValue = row.dataset.fecha?.toLowerCase() || '';
+                    break;
+                case 'canton':
+                    rowValue = row.dataset.canton?.toLowerCase() || '';
+                    break;
+                case 'gad':
+                    rowValue = row.dataset.gad?.toLowerCase() || '';
+                    break;
+                case 'numero':
+                    rowValue = row.dataset.numero?.toLowerCase() || '';
+                    break;
+            }
+            row.style.display = !value || rowValue.includes(value) ? '' : 'none';
         });
+    }
 
-        console.log('Filtros de receive aplicados:', { idValue, fechaValue, cantonValue, gadValue, numeroValue });
+    if (filterField && filterValue) {
+        filterField.addEventListener('change', applyDynamicFilter);
+        filterValue.addEventListener('input', applyDynamicFilter);
     }
 
     if (filterId) filterId.addEventListener('input', applyReceiveFilters);
@@ -404,15 +481,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (filterTecnicoDesign) filterTecnicoDesign.addEventListener('change', applyDesignFilters);
     if (filterTipoAsesoriaDesign) filterTipoAsesoriaDesign.addEventListener('change', applyDesignFilters);
     if (filterFechaDesign) filterFechaDesign.addEventListener('change', applyDesignFilters);
-
-    const flashes = document.querySelectorAll('.alert');
-    flashes.forEach((flash, index) => {
-        flash.style.top = `${20 + (index * 80)}px`;
-        setTimeout(() => {
-            flash.style.animation = 'fadeOut 0.5s ease-in-out';
-            setTimeout(() => flash.remove(), 500);
-        }, 3000);
-    });
 
     if (filterId || filterFecha || filterCanton || filterGad || filterNumeroOficio) {
         applyReceiveFilters();
@@ -500,7 +568,7 @@ document.addEventListener('DOMContentLoaded', function () {
             modal.querySelector('#current_imagen').textContent = this.dataset.imagen || 'Sin imagen';
         });
     });
-    
+
     document.getElementById('filterTecnico').addEventListener('change', filterTable);
     document.getElementById('filterTipo').addEventListener('change', filterTable);
     document.getElementById('filterSearch').addEventListener('input', filterTable);
@@ -521,6 +589,7 @@ document.addEventListener('DOMContentLoaded', function () {
             row.style.display = tecnicoMatch && tipoMatch && searchMatch ? '' : 'none';
         });
     }
+
 
 });
 

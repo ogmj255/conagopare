@@ -436,7 +436,6 @@ body {
     z-index: 1050 !important;
 }
 
-/* Fallback para deshabilitar animaciones si es necesario */
 .no-animations .modal.fade .modal-dialog {
     transition: none !important;
     transform: none !important;
@@ -445,7 +444,7 @@ body {
 .no-animations .modal-backdrop {
     transition: none !important;
 }
-/* Estilos para las alertas */
+
 .alert {
     position: fixed;
     top: 20px;

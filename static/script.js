@@ -26,7 +26,6 @@ flashes.forEach((flash, index) => {
     }, 3000);
 });
 
-
 async function fetchNotifications() {
     try {
         console.log('Fetching notifications...');
@@ -97,28 +96,29 @@ function handleFlashes() {
     });
 }
 async function clearNotifications() {
-        try {
-            const response = await fetch('/clear_notifications', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            const data = await response.json();
-            if (data.success) {
-                fetchNotifications();
-            } else {
-                console.error('Error clearing notifications:', data.error);
-            }
-        } catch (error) {
-            console.error('Error clearing notifications:', error);
+    try {
+        const response = await fetch('/clear_notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        if (data.success) {
+            fetchNotifications();
+        } else {
+            console.error('Error clearing notifications:', data.error);
         }
+    } catch (error) {
+        console.error('Error clearing notifications:', error);
     }
-    document.addEventListener('DOMContentLoaded', () => {
-        fetchNotifications();
-        setInterval(fetchNotifications, 10000);
-    });
+}
+document.addEventListener('DOMContentLoaded', () => {
+    fetchNotifications();
+    setInterval(fetchNotifications, 10000);
+});
 
 
 document.addEventListener('DOMContentLoaded', function () {
+    handleFlashes();
     console.log('DOM fully loaded');
 
     function showSection(sectionId) {
@@ -249,30 +249,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     window.toggleEntregaFields = toggleEntregaFields;
 
-    async function fetchNotifications() {
-        try {
-            const response = await fetch('/get_notifications');
-            const data = await response.json();
-            const notificationCount = document.getElementById('notificationCount');
-            const notificationList = document.getElementById('notificationList');
-            notificationCount.textContent = data.count;
-            notificationList.innerHTML = '';
-            if (data.count === 0) {
-                notificationList.innerHTML = '<li class="dropdown-item text-muted">No hay notificaciones</li>';
-            } else {
-                data.notifications.forEach(notification => {
-                    const li = document.createElement('li');
-                    li.className = 'dropdown-item';
-                    li.innerHTML = `<strong>${notification.message}</strong><br><small>${notification.timestamp}</small>`;
-                    notificationList.appendChild(li);
-                });
-            }
-        } catch (error) {
-            console.error('Error fetching notifications:', error);
-        }
-    }
-
-    
     const staticModals = ['#editModal', '#confirmModal', '#changePasswordModal'];
     staticModals.forEach(selector => {
         const modal = document.querySelector(selector);
@@ -427,12 +403,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (filterGad) filterGad.addEventListener('change', applyReceiveFilters);
     if (filterNumeroOficio) filterNumeroOficio.addEventListener('input', applyReceiveFilters);
 
-    const filterIdDesign = document.getElementById('filterIdDesign');
-    const filterNumeroOficioDesign = document.getElementById('filterNumeroOficioDesign');
-    const filterTecnicoDesign = document.getElementById('filterTecnicoDesign');
-    const filterTipoAsesoriaDesign = document.getElementById('filterTipoAsesoriaDesign');
-    const filterFechaDesign = document.getElementById('filterFechaDesign');
-    const tableRowsDesign = document.querySelectorAll('#designadosTable tbody tr');
 
     function applyDesignFilters() {
         const idValue = filterIdDesign?.value.toLowerCase() || '';
@@ -593,4 +563,149 @@ document.addEventListener('DOMContentLoaded', function () {
 
 });
 
+let inactivityTimeout;
+let warningTimeout;
+const inactivityTime = 15 * 60 * 1000; // 5 segundos para pruebas
+const warningTime = 14 * 60 * 1000;    // 4 segundos para pruebas
 
+function resetInactivityTimer() {
+    clearTimeout(inactivityTimeout);
+    clearTimeout(warningTimeout);
+    warningTimeout = setTimeout(showWarning, warningTime);
+    inactivityTimeout = setTimeout(logoutUser, inactivityTime);
+}
+
+function showWarning() {
+        const modal = new bootstrap.Modal(document.getElementById('inactivityModal'), {
+            backdrop: 'static',
+            keyboard: false
+        });
+        const startTime = Date.now();
+        const countdownElement = document.getElementById('countdown');
+        countdownElement.textContent = `60 segundos`;
+
+        const countdownInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const remaining = 60 - Math.floor(elapsed / 1000);
+            countdownElement.textContent = `${remaining} segundos`;
+            if (remaining <= 0) {
+                clearInterval(countdownInterval);
+                modal.hide();
+                logoutUser();
+            }
+        }, 1000);
+
+        document.getElementById('continueSession').addEventListener('click', () => {
+            clearInterval(countdownInterval);
+            modal.hide();
+            resetInactivityTimer();
+        });
+
+        modal.show();
+    }
+
+async function logoutUser() {
+        try {
+            console.log('Intentando cerrar sesión...');
+            const response = await fetch('/logout', {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include'
+            });
+            console.log('Respuesta del servidor:', response.status, response.statusText);
+            if (response.ok) {
+                console.log('Cierre de sesión exitoso, redirigiendo a /login');
+                window.location.href = '/login';
+            } else {
+                console.error('Error en el servidor al cerrar sesión:', response.status, await response.text());
+            }
+        } catch (error) {
+            console.error('Error al cerrar sesión:', error);
+            window.location.href = '/login';
+        }
+    }
+
+    ['click', 'mousemove', 'keypress', 'scroll', 'touchstart'].forEach(event => {
+        document.addEventListener(event, resetInactivityTimer, true);
+    });
+
+    window.addEventListener('load', resetInactivityTimer);
+
+function toggleFilterInput() {
+    const filterField = document.getElementById('filterField').value;
+    const filterValue = document.getElementById('filterValue');
+    const filterDateValue = document.getElementById('filterDateValue');
+
+    if (filterField === 'fecha') {
+        filterValue.classList.add('d-none');
+        filterDateValue.classList.remove('d-none');
+    } else {
+        filterValue.classList.remove('d-none');
+        filterDateValue.classList.add('d-none');
+        filterDateValue.value = '';
+    }
+}
+
+function applyDesignFilters() {
+    const filterField = document.getElementById('filterField').value;
+    const filterValue = filterField === 'fecha' ?
+        document.getElementById('filterDateValue').value :
+        document.getElementById('filterValue').value.toLowerCase();
+    const tableRowsDesign = document.querySelectorAll('#designadosTable tbody tr');
+
+    const oficioGroups = {};
+    tableRowsDesign.forEach(row => {
+        const oficioId = row.dataset.oficioId;
+        if (oficioId) {
+            if (!oficioGroups[oficioId]) {
+                oficioGroups[oficioId] = [];
+            }
+            oficioGroups[oficioId].push(row);
+        }
+    });
+
+    Object.values(oficioGroups).forEach(group => {
+        const firstRow = group[0];
+        const id = firstRow.dataset.id?.toLowerCase() || '';
+        const numero = firstRow.dataset.numero?.toLowerCase() || '';
+        const tecnicos = firstRow.dataset.tecnicos?.toLowerCase() || '';
+        const tipos = firstRow.dataset.tipos?.toLowerCase() || '';
+        const fecha = firstRow.dataset.fecha || '';
+
+        let shouldShow = false;
+        switch (filterField) {
+            case 'id':
+                shouldShow = !filterValue || id.includes(filterValue);
+                break;
+            case 'numero':
+                shouldShow = !filterValue || numero.includes(filterValue);
+                break;
+            case 'tecnico':
+                shouldShow = !filterValue || tecnicos.includes(filterValue);
+                break;
+            case 'tipo':
+                shouldShow = !filterValue || tipos.includes(filterValue);
+                break;
+            case 'fecha':
+                shouldShow = !filterValue || (fecha && fecha === filterValue);
+                break;
+        }
+        group.forEach(row => {
+            row.style.display = shouldShow ? '' : 'none';
+        });
+    });
+
+    console.log('Filtros de design aplicados:', { filterField, filterValue, sampleId: tableRowsDesign[0]?.dataset.id });
+}
+
+const filterFieldElement = document.getElementById('filterField');
+const filterValueElement = document.getElementById('filterValue');
+const filterDateValueElement = document.getElementById('filterDateValue');
+if (filterFieldElement && filterValueElement && filterDateValueElement) {
+    filterFieldElement.addEventListener('change', () => {
+        toggleFilterInput();
+        applyDesignFilters();
+    });
+    filterValueElement.addEventListener('input', applyDesignFilters);
+    filterDateValueElement.addEventListener('change', applyDesignFilters);
+}

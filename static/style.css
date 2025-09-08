@@ -6,6 +6,7 @@ body {
     line-height: 1.6;
     margin: 0;
 }
+
 .login-card {
     max-width: 400px;
     width: 100%;
@@ -58,6 +59,7 @@ body {
     .main-container {
         margin: 1rem auto;
     }
+
     .card-header {
         font-size: 1.1rem;
     }
@@ -217,9 +219,11 @@ body {
 }
 
 .alert {
-    position: fixed;
+    margin: 0 !important;
+    position:  fixed !important;
     top: 20px;
     right: 20px;
+    left: auto !important;
     width: 350px;
     max-width: 90vw;
     border-radius: 10px;
@@ -229,7 +233,7 @@ body {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    animation: slideIn 0.5s cubic-bezier(0.4, 1.7, 0.6, 0.97);
+    animation: fadeIn 0.5s ease-in-out;
     border-left: 6px solid #1e3a8a;
     background: #ffffff;
     z-index: 2000;
@@ -259,19 +263,14 @@ body {
 }
 
 @media (max-width: 768px) {
-    .container {
-        padding: 0 1rem;
-    }
     .alert {
-        width: 95vw;
-        right: 1vw;
-        left: 1vw;
+        width: 300px;
+        max-width: 95vw;
+        right: 10px !important;
+        left: auto !important;
         top: 12px;
         font-size: 0.95rem;
         padding-left: 2.2rem;
-    }
-    .card {
-        margin-bottom: 1.2rem;
     }
 }
 
@@ -294,6 +293,8 @@ body {
 }
 
 .dropdown-menu {
+    right: 0%;
+    left: auto;
     border-radius: 10px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     border: none;
@@ -315,6 +316,7 @@ body {
         transform: translateX(100%);
         opacity: 0;
     }
+
     to {
         transform: translateX(0);
         opacity: 1;
@@ -325,6 +327,7 @@ body {
     from {
         opacity: 1;
     }
+
     to {
         opacity: 0;
     }
@@ -335,6 +338,7 @@ body {
         transform: scale(0.9);
         opacity: 0;
     }
+
     to {
         transform: scale(1);
         opacity: 1;
@@ -409,6 +413,7 @@ body {
     background: #1e3a8a !important;
     color: #ffffff;
 }
+
 .product-img {
     max-width: 100px;
     max-height: 100px;
@@ -445,22 +450,28 @@ body {
     transition: none !important;
 }
 
-.alert {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1060;
-    min-width: 300px;
-    animation: fadeIn 0.5s ease-in-out;
-}
+
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-20px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 @keyframes fadeOut {
-    from { opacity: 1; transform: translateY(0); }
-    to { opacity: 0; transform: translateY(-20px); }
-}
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
 
+    to {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+}

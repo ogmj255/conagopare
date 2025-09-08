@@ -1,15 +1,27 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from pymongo import MongoClient
 from datetime import datetime
 from bson.objectid import ObjectId
 from werkzeug.utils import secure_filename
+from datetime import timedelta
+from dotenv import load_dotenv
 import re
 import os
+import bcrypt
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'
+load_dotenv()
+app.secret_key = os.getenv('SECRET_KEY', 'a1eb8b7d4c7a96ea202923296486a51c')
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+app.permanent_session_lifetime = timedelta(minutes=15)
+app.config['SESSION_PERMANENT'] = False
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
 client = MongoClient('mongodb+srv://ogmoscosoj:KcB4gSO579gBCSzY@conagoparedb.vwmlbqg.mongodb.net/?retryWrites=true&w=majority&appName=conagoparedb')
 db_oficios = client['conagoparedb']
 oficios = db_oficios['oficios']
@@ -17,6 +29,26 @@ parroquias = db_oficios['parroquias']
 users = db_oficios['users_db']
 notifications = db_oficios['notifications']
 tipos_asesoria_coll = db_oficios['tipos_asesoria']
+
+
+class User(UserMixin):
+    def __init__(self, username, role, id=None):
+        self.id = username 
+        self.username = username
+        self.role = role
+
+@login_manager.user_loader
+def load_user(username):
+    user_data = users.find_one({'username': username})
+    if user_data:
+        return User(username=user_data['username'], role=user_data['role'])
+    return None
+
+#try:
+    #oficios.create_index([('id_secuencial', 1)], unique=True)
+    #print("Índice único creado para id_secuencial.")
+#except Exception as e:
+    #print(f"Error al crear índice: {e}")
 
 try:
     client.admin.command('ping')
@@ -26,7 +58,7 @@ except Exception as e:
 
 def get_tipos_asesoria():
     return [t['nombre'] for t in tipos_asesoria_coll.find()] or ['Asesoría Técnica', 'Inspección', 'Consultoría']
-roles_list = ['receiver', 'designer', 'tecnico', 'admin','sistemas']
+roles_list = ['receiver', 'designer', 'tecnico', 'admin', 'sistemas']
 
 def format_date(iso_date):
     """Format ISO date to a readable string."""
@@ -37,6 +69,14 @@ def format_date(iso_date):
         except ValueError:
             return iso_date
     return ''
+
+def reordenar_ids_secuenciales(year):
+    prefix = f"{year}-"
+    all_in_year = list(oficios.find({'id_secuencial': {'$regex': f"^{re.escape(prefix)}"}}).sort('id_secuencial', 1))
+    for i, doc in enumerate(all_in_year, 1):
+        new_id = f"{prefix}{i:04d}"
+        oficios.update_one({'_id': doc['_id']}, {'$set': {'id_secuencial': new_id}})
+
 for oficio in oficios.find({'assignments': {'$exists': True}}):
     assignments = oficio.get('assignments', [])
     updated_assignments = []
@@ -69,65 +109,94 @@ for oficio in oficios.find({'assignments': {'$exists': True}}):
 
 @app.route('/')
 def index():
-    if 'user' in session:
-        if session['role'] == 'receiver':
+    if current_user.is_authenticated:
+        if current_user.role == 'receiver':
             return redirect(url_for('receive'))
-        elif session['role'] == 'designer':
+        elif current_user.role == 'designer':
             return redirect(url_for('design'))
-        elif session['role'] == 'tecnico':
+        elif current_user.role == 'tecnico':
             return redirect(url_for('tecnico'))
-        elif session['role'] == 'admin':
+        elif current_user.role == 'admin':
             return redirect(url_for('admin'))
-        elif session['role'] == 'sistemas':
+        elif current_user.role == 'sistemas':
             return redirect(url_for('sistemas'))
-    return redirect(url_for('login'))
+    return render_template('login.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if 'user' in session:
+    if current_user.is_authenticated:
         return redirect(url_for('index'))
     if request.method == 'POST':
         username = request.form['username']
-        password = request.form['password']
-        user = users.find_one({'username': username, 'password': password})
+        password = request.form['password'].encode('utf-8')
+        user = users.find_one({'username': username})
         if user:
-            session['user'] = username
-            session['role'] = user['role']
-            full_name = f"{user.get('nombre', '')} {user.get('apellido', '')}".strip()
-            session['full_name'] = full_name if full_name else username
-            return redirect(url_for('index'))
+            stored_password = user['password']
+            try:
+                if isinstance(stored_password, bytes):
+                    password_match = bcrypt.checkpw(password, stored_password)
+                else:
+                    password_match = bcrypt.checkpw(password, stored_password.data)
+                if password_match:
+                    user_obj = User(username=user['username'], role=user['role'])
+                    login_user(user_obj)
+                    session['full_name'] = f"{user.get('nombre', '')} {user.get('apellido', '')}".strip() or username
+                    return redirect(url_for('index'))
+                else:
+                    flash('Contraseña incorrecta.', 'error')
+            except Exception as e:
+                flash(f'Error al verificar contraseña: {str(e)}', 'error')
         else:
-            flash('Login fallido. Usuario o contraseña incorrectos.', 'error')
+            flash('Usuario no encontrado.', 'error')
     return render_template('login.html')
 
-@app.route('/logout')
+@app.route('/logout', methods=['GET', 'POST'])
+@login_required
 def logout():
-    session.pop('user', None)
-    session.pop('role', None)
-    session.pop('full_name', None)
+    logout_user()
+    session.clear()
+    flash('Has cerrado sesión exitosamente.', 'success')
     return redirect(url_for('login'))
 
+@app.before_request
+def check_session_timeout():
+    if current_user.is_authenticated:
+        last_activity = session.get('last_activity')
+        if last_activity:
+            try:
+                last_activity_time = datetime.fromisoformat(last_activity)
+                if (datetime.now() - last_activity_time).total_seconds() > 900:
+                    logout_user()
+                    session.clear()
+                    flash('Sesión cerrada por inactividad.', 'info')
+                    return redirect(url_for('login'))
+            except ValueError:
+                logout_user()
+                session.clear()
+                flash('Error en la sesión. Por favor, inicia sesión nuevamente.', 'error')
+                return redirect(url_for('login'))
+        session['last_activity'] = datetime.now().isoformat()
+
 @app.route('/change_password', methods=['POST'])
+@login_required
 def change_password():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-    
-    old_password = request.form.get('old_password')
-    new_password = request.form.get('new_password')
-    confirm_password = request.form.get('confirm_password')
+    old_password = request.form.get('old_password').encode('utf-8')
+    new_password = request.form.get('new_password').encode('utf-8')
+    confirm_password = request.form.get('confirm_password').encode('utf-8')
     
     if not old_password or not new_password or not confirm_password:
         flash('Todos los campos son obligatorios', 'error')
         return redirect(url_for('index'))
     
-    user = users.find_one({'username': session['user'], 'password': old_password})
-    if not user:
+    user = users.find_one({'username': current_user.username})
+    if not user or not bcrypt.checkpw(old_password, user['password']):
         flash('La contraseña anterior es incorrecta', 'error')
     elif new_password != confirm_password:
         flash('Las nuevas contraseñas no coinciden', 'error')
     else:
+        hashed_password = bcrypt.hashpw(new_password, bcrypt.gensalt())
         try:
-            users.update_one({'username': session['user']}, {'$set': {'password': new_password}})
+            users.update_one({'username': current_user.username}, {'$set': {'password': hashed_password}})
             flash('Contraseña actualizada exitosamente', 'success')
         except Exception as e:
             flash(f'Error al actualizar contraseña: {str(e)}', 'error')
@@ -136,9 +205,9 @@ def change_password():
 
 @app.route('/get_notifications', methods=['GET'])
 def get_notifications():
-    if 'user' not in session:
+    if not current_user.is_authenticated:
         return jsonify({'notifications': [], 'count': 0})
-    user_notifications = list(notifications.find({'user': session['user'], 'read': False}))
+    user_notifications = list(notifications.find({'user': current_user.username, 'read': False}))
     count = len(user_notifications)
     formatted_notifications = [
         {
@@ -150,18 +219,19 @@ def get_notifications():
 
 @app.route('/clear_notifications', methods=['POST'])
 def clear_notifications():
-    if 'user' not in session:
+    if not current_user.is_authenticated:
         return jsonify({'success': False})
     try:
-        notifications.update_many({'user': session['user'], 'read': False}, {'$set': {'read': True}})
+        notifications.update_many({'user': current_user.username, 'read': False}, {'$set': {'read': True}})
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/notificaciones/count')
 def notificaciones_count():
-    if 'user' not in session:
+    if not current_user.is_authenticated:
         return jsonify({'count': 0})
-    count = notifications.count_documents({'user': session['user'], 'read': False})
+    count = notifications.count_documents({'user': current_user.username, 'read': False})
     return jsonify({'count': count})
 
 @app.route('/get_canton', methods=['POST'])
@@ -174,27 +244,20 @@ def get_canton():
             return jsonify({'canton': parroquia_data.get('canton', '')})
     return jsonify({'canton': ''})
 
-def reordenar_ids_secuenciales(year):
-    prefix = f"{year}-"
-    all_in_year = list(oficios.find({'id_secuencial': {'$regex': f"^{re.escape(prefix)}"}}).sort('id_secuencial', 1))
-    for i, doc in enumerate(all_in_year, 1):
-        new_id = f"{prefix}{i:04d}"
-        oficios.update_one({'_id': doc['_id']}, {'$set': {'id_secuencial': new_id}})
-
 @app.route('/receive', methods=['GET', 'POST'])
+@login_required
 def receive():
-    if 'user' not in session or session['role'] not in ['receiver', 'admin']:
+    if current_user.role not in ['receiver', 'admin']:
         return redirect(url_for('login'))
     parroquias_data = list(parroquias.find())
     if not parroquias_data:
         flash('No se encontraron parroquias en la base de datos. Contacte al administrador.', 'warning')
         print("Advertencia: la colección 'parroquias' está vacía.")
     
-    historial = list(oficios.find().sort('fecha_recibido', -1))
+    historial = list(oficios.find({'fecha_recibido': {'$exists': True}}).sort('fecha_recibido', -1))
     for oficio in historial:
-        oficio['_id'] = str(oficio['_id'])
-        oficio['fecha_enviado_formatted'] = format_date(oficio['fecha_enviado'])
-        oficio['fecha_recibido_formatted'] = format_date(oficio['fecha_recibido'])
+        oficio['fecha_enviado_formatted'] = format_date(oficio.get('fecha_enviado'))
+        oficio['fecha_recibido_formatted'] = format_date(oficio.get('fecha_recibido'))
     users_list = list(users.find())
     
     if request.method == 'POST':
@@ -217,7 +280,8 @@ def receive():
 
             try:
                 year = fecha_enviado.split('-')[0]
-                count = oficios.count_documents({'id_secuencial': {'$regex': f'^{year}-'}}) + 1
+                max_id_doc = oficios.find_one({'id_secuencial': {'$regex': f'^{year}-'}}, sort=[('id_secuencial', -1)])
+                count = int(max_id_doc['id_secuencial'].split('-')[1]) + 1 if max_id_doc else 1
                 id_secuencial = f"{year}-{str(count).zfill(4)}"
 
                 oficio = {
@@ -305,7 +369,7 @@ def receive():
                     year = deleted_oficio['id_secuencial'].split('-')[0]
                     oficios.delete_one({'_id': ObjectId(oficio_id)})
                     reordenar_ids_secuenciales(year)
-                    flash('Oficio eliminado exitosamente', 'success')
+                    flash('Oficio eliminado y IDs reordenados exitosamente', 'success')
                 else:
                     flash('Oficio no encontrado.', 'error')
             except Exception as e:
@@ -318,8 +382,9 @@ def receive():
         users=users_list)
 
 @app.route('/design', methods=['GET', 'POST'])
+@login_required
 def design():
-    if 'user' not in session or session['role'] not in ['designer', 'admin']:
+    if current_user.role not in ['designer', 'admin']:
         return redirect(url_for('login'))
 
     if request.method == 'POST':
@@ -405,9 +470,15 @@ def design():
         elif 'delete_oficio' in request.form:
             oficio_id = request.form.get('oficio_id')
             try:
-                oficios.delete_one({'_id': ObjectId(oficio_id)})
-                notifications.delete_many({'oficio_id': ObjectId(oficio_id)})
-                flash('Oficio eliminado exitosamente', 'success')
+                deleted_oficio = oficios.find_one({'_id': ObjectId(oficio_id)})
+                if deleted_oficio:
+                    year = deleted_oficio['id_secuencial'].split('-')[0]
+                    oficios.delete_one({'_id': ObjectId(oficio_id)})
+                    reordenar_ids_secuenciales(year)
+                    notifications.delete_many({'oficio_id': ObjectId(oficio_id)})
+                    flash('Oficio eliminado y IDs reordenados exitosamente', 'success')
+                else:
+                    flash('Oficio no encontrado.', 'error')
             except Exception as e:
                 flash(f'Error al eliminar oficio: {str(e)}', 'error')
             return redirect(url_for('design'))
@@ -415,7 +486,7 @@ def design():
     pendientes = list(oficios.find({'estado': 'pendiente'}).sort('fecha_enviado', -1))
     designados = list(oficios.find({'estado': 'designado'}).sort('fecha_designacion', -1))
     for oficio in pendientes + designados:
-        oficio['fecha_enviado_formatted'] = format_date(oficio['fecha_enviado'])
+        oficio['fecha_enviado_formatted'] = format_date(oficio.get('fecha_enviado'))
         oficio['fecha_designacion'] = oficio.get('fecha_designacion', '')
         oficio['fecha_designacion_formatted'] = format_date(oficio.get('fecha_designacion', ''))
 
@@ -427,8 +498,9 @@ def design():
         parroquias=list(parroquias.find()))
 
 @app.route('/tecnico', methods=['GET', 'POST'])
+@login_required
 def tecnico():
-    if 'user' not in session or session['role'] not in ['tecnico', 'admin']:
+    if current_user.role not in ['tecnico', 'admin']:
         return redirect(url_for('login'))
 
     if request.method == 'POST':
@@ -436,7 +508,7 @@ def tecnico():
             oficio_id = request.form['oficio_id']
             try:
                 oficios.update_one(
-                    {'_id': ObjectId(oficio_id), 'assignments.tecnico': session['user']},
+                    {'_id': ObjectId(oficio_id), 'assignments.tecnico': current_user.username},
                     {
                         '$set': {
                             'assignments.$.sub_estado': request.form['sub_estado'],
@@ -456,7 +528,7 @@ def tecnico():
             oficio_id = request.form['oficio_id']
             try:
                 oficios.update_one(
-                    {'_id': ObjectId(oficio_id), 'assignments.tecnico': session['user']},
+                    {'_id': ObjectId(oficio_id), 'assignments.tecnico': current_user.username},
                     {
                         '$set': {
                             'assignments.$.sub_estado': 'Concluido',
@@ -470,7 +542,7 @@ def tecnico():
                 )
                 notifications.insert_one({
                     'user': 'admin',
-                    'message': f'Oficio entregado por {session["user"]}: {request.form["numero_oficio"]}',
+                    'message': f'Oficio entregado por {current_user.username}: {request.form["numero_oficio"]}',
                     'timestamp': datetime.now().isoformat(),
                     'oficio_id': ObjectId(oficio_id),
                     'read': False
@@ -479,7 +551,7 @@ def tecnico():
             except Exception as e:
                 flash(f'Error al entregar oficio: {str(e)}', 'error')
 
-        elif 'create_user' in request.form and session['role'] == 'admin':
+        elif 'create_user' in request.form and current_user.role == 'admin':
             try:
                 users.insert_one({
                     'username': request.form['new_username'],
@@ -491,7 +563,7 @@ def tecnico():
             except Exception as e:
                 flash(f'Error al crear usuario: {str(e)}', 'error')
 
-        elif 'edit_user' in request.form and session['role'] == 'admin':
+        elif 'edit_user' in request.form and current_user.role == 'admin':
             user_id = request.form['user_id']
             update_data = {'username': request.form['edit_username']}
             if request.form['edit_password']:
@@ -508,7 +580,7 @@ def tecnico():
     completados = []
     for oficio in oficios.find({'estado': 'designado'}).sort('fecha_designacion', -1):
         for assignment in oficio.get('assignments', []):
-            if assignment['tecnico'] == session['user']:
+            if assignment['tecnico'] == current_user.username:
                 assignment_data = {
                     '_id': str(oficio['_id']),
                     'id_secuencial': oficio['id_secuencial'],
@@ -537,22 +609,26 @@ def tecnico():
     return render_template('tecnico.html',
         asignados=asignados,
         completados=completados,
-        users=list(users.find()) if session['role'] == 'admin' else [],
+        users=list(users.find()) if current_user.role == 'admin' else [],
         parroquias=list(parroquias.find()))
 
 @app.route('/admin', methods=['GET', 'POST'])
+@login_required
 def admin():
-    if 'user' not in session or session['role'] != 'admin':
+    if current_user.role != 'admin':
         return redirect(url_for('login'))
     
     if request.method == 'POST':
         if 'create_user' in request.form:
             try:
+                username = request.form['username']
+                password = request.form['password'].encode('utf-8')
+                hashed_password = bcrypt.hashpw(password, bcrypt.gensalt())
                 users.insert_one({
                     'nombre': request.form['nombre'],
                     'apellido': request.form['apellido'],
-                    'username': request.form['username'],
-                    'password': request.form['password'],
+                    'username': username,
+                    'password': hashed_password,
                     'role': request.form['role']
                 })
                 flash('Usuario creado exitosamente', 'success')
@@ -568,7 +644,8 @@ def admin():
                 'role': request.form['role']
             }
             if request.form['password']:
-                update_data['password'] = request.form['password']
+                password = request.form['password'].encode('utf-8')
+                update_data['password'] = bcrypt.hashpw(password, bcrypt.gensalt())
             try:
                 users.update_one({'_id': ObjectId(user_id)}, {'$set': update_data})
                 flash('Usuario actualizado exitosamente', 'success')
@@ -659,9 +736,15 @@ def admin():
         elif 'delete_oficio' in request.form:
             oficio_id = request.form['oficio_id']
             try:
-                oficios.delete_one({'_id': ObjectId(oficio_id)})
-                notifications.delete_many({'oficio_id': ObjectId(oficio_id)})
-                flash('Oficio eliminado exitosamente', 'success')
+                deleted_oficio = oficios.find_one({'_id': ObjectId(oficio_id)})
+                if deleted_oficio:
+                    year = deleted_oficio['id_secuencial'].split('-')[0]
+                    oficios.delete_one({'_id': ObjectId(oficio_id)})
+                    reordenar_ids_secuenciales(year)
+                    notifications.delete_many({'oficio_id': ObjectId(oficio_id)})
+                    flash('Oficio eliminado y IDs reordenados exitosamente', 'success')
+                else:
+                    flash('Oficio no encontrado.', 'error')
             except Exception as e:
                 flash(f'Error al eliminar oficio: {str(e)}', 'error')
     
@@ -672,8 +755,8 @@ def admin():
     }
     all_oficios = list(oficios.find().sort('fecha_recibido', -1))
     for oficio in all_oficios:
-        oficio['fecha_recibido_formatted'] = format_date(oficio['fecha_recibido'])
-        oficio['fecha_enviado_formatted'] = format_date(oficio['fecha_enviado'])
+        oficio['fecha_recibido_formatted'] = format_date(oficio.get('fecha_recibido'))
+        oficio['fecha_enviado_formatted'] = format_date(oficio.get('fecha_enviado'))
         oficio['fecha_designacion_formatted'] = format_date(oficio.get('fecha_designacion', ''))
         oficio['assignments'] = oficio.get('assignments', [])
     
@@ -684,17 +767,11 @@ def admin():
         roles=roles_list,
         tipos_asesoria=list(tipos_asesoria_coll.find()),
         parroquias=list(parroquias.find()))
-def reordenar_ids_secuenciales(year):
-    """Reordena los id_secuencial de los oficios de un año para que sean consecutivos."""
-    oficios_del_anio = list(oficios.find({'id_secuencial': {'$regex': f'^{year}-'}}).sort('fecha_enviado', 1))
-    for idx, oficio in enumerate(oficios_del_anio, start=1):
-        nuevo_id = f"{year}-{str(idx).zfill(4)}"
-        if oficio['id_secuencial'] != nuevo_id:
-            oficios.update_one({'_id': oficio['_id']}, {'$set': {'id_secuencial': nuevo_id}})
 
 @app.route('/sistemas', methods=['GET', 'POST'])
+@login_required
 def sistemas():
-    if 'user' not in session or session['role'] not in ['admin', 'sistemas']:
+    if current_user.role not in ['admin', 'sistemas']:
         return redirect(url_for('login'))
     
     if request.method == 'POST':

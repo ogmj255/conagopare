@@ -1,16 +1,13 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel de Recepción</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
-    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-
 <body>
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
@@ -22,12 +19,13 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link active" id="tab-registro" onclick="showPanel('registro')" href="#">Registrar
-                            Oficio</a>
+                        <a class="nav-link active" id="tab-registrar" onclick="showPanel('registrar')" href="#">Registrar Oficio</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" id="tab-historial" onclick="showPanel('historial')" href="#">Historial de
-                            Registros</a>
+                        <a class="nav-link" id="tab-historial" onclick="showPanel('historial')" href="#">Historial de Registros</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="tab-seguimiento" onclick="showPanel('seguimiento')" href="#">Seguimiento</a>
                     </li>
                 </ul>
                 <ul class="navbar-nav">
@@ -35,7 +33,7 @@
                         <i class="bi bi-person-circle fs-4 me-2 text-white"></i>
                         <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button"
                             data-bs-toggle="dropdown" aria-expanded="false">
-                            {{ session.full_name | default(session.user, true) }} - {{ session.user }}
+                            {{ session.full_name | default(current_user.username, true) }} - {{ current_user.username }}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
                             <li><a class="dropdown-item" href="#" data-bs-toggle="modal"
@@ -52,7 +50,7 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         {% for category, message in messages %}
-        <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible show"
+        <div class="alert alert-{{ 'success' if category == 'success' else 'danger' if category == 'danger' else 'warning' }} alert-dismissible fade show"
             role="alert">
             {{ message }}
         </div>
@@ -61,72 +59,85 @@
         {% endwith %}
 
         <div class="main-container">
-            <div id="panel-registro" class="fade-panel active">
+            <!-- Registrar Panel -->
+            <div id="panel-registrar" class="fade-panel active">
                 <div class="card">
-                    <div class="card-header">Registrar Nuevo Oficio</div>
+                    <div class="card-header">
+                        <i class="bi bi-file-earmark-plus me-2"></i>Registrar Nuevo Oficio
+                    </div>
                     <div class="card-body">
-                        <form method="POST" action="{{ url_for('receive') }}" id="registerForm">
+                        <form id="registerForm" method="POST" action="{{ url_for('receive') }}" enctype="multipart/form-data" novalidate>
                             <input type="hidden" name="register_oficio" value="true">
                             <div class="mb-3">
                                 <label for="fecha_enviado" class="form-label">Fecha del Oficio</label>
-                                <input type="date" class="form-control" id="fecha_enviado" name="fecha_enviado"
-                                    required>
+                                <input type="date" class="form-control" id="fecha_enviado" name="fecha_enviado" required>
+                                <div class="invalid-feedback">Por favor, seleccione una fecha.</div>
                             </div>
                             <div class="mb-3">
                                 <label for="numero_oficio" class="form-label">Número de Oficio</label>
-                                <input type="text" class="form-control" id="numero_oficio" name="numero_oficio"
-                                    required>
+                                <input type="text" class="form-control" id="numero_oficio" name="numero_oficio" required>
+                                <div class="invalid-feedback">Por favor, ingrese el número de oficio.</div>
                             </div>
                             <div class="mb-3">
                                 <label for="gad_parroquial" class="form-label">GAD Parroquial</label>
-                                <select class="form-select" id="gad_parroquial" name="gad_parroquial"
-                                    onchange="updateCanton()" required>
+                                <select class="form-select" id="gad_parroquial" name="gad_parroquial" onchange="updateCanton()" required>
                                     <option value="">Seleccione...</option>
                                     {% for parroquia in parroquias %}
                                     <option value="{{ parroquia.parroquia }}">{{ parroquia.parroquia }}</option>
                                     {% endfor %}
                                 </select>
+                                <div class="invalid-feedback">Por favor, seleccione un GAD parroquial.</div>
                             </div>
                             <div class="mb-3">
                                 <label for="canton" class="form-label">Cantón</label>
-                                <input type="text" class="form-control" id="canton" name="canton" readonly>
+                                <input type="text" class="form-control" id="canton" name="canton" readonly required>
+                                <div class="invalid-feedback">Por favor, seleccione un GAD parroquial para cargar el cantón.</div>
                             </div>
                             <div class="mb-3">
                                 <label for="detalle" class="form-label">Detalle</label>
-                                <textarea class="form-control" id="detalle" name="detalle" rows="4"></textarea>
+                                <textarea class="form-control" id="detalle" name="detalle" rows="4" required></textarea>
+                                <div class="invalid-feedback">Por favor, ingrese el detalle.</div>
                             </div>
-                            <button type="submit" class="btn btn-success">Registrar</button>
+                            <div class="mb-3">
+                                <label for="archivo" class="form-label">Subir Archivo (PDF)</label>
+                                <input type="file" class="form-control" id="archivo" name="archivo" accept=".pdf">
+                                <div class="invalid-feedback">Por favor, seleccione un archivo PDF.</div>
+                            </div>
+                            <button type="button" class="btn btn-success" onclick="showConfirmModal()">Registrar</button>
                         </form>
                     </div>
                 </div>
             </div>
 
+            <!-- Historial Panel -->
             <div id="panel-historial" class="fade-panel">
                 <div class="card">
-                    <div class="card-header">Historial de Registros</div>
+                    <div class="card-header">
+                        <i class="bi bi-archive me-2"></i>Historial de Registros
+                    </div>
                     <div class="card-body">
                         <p class="text-muted">Número de registros creados: {{ historial|length }}</p>
                         <div class="mb-4">
                             <h6>Filtrar Registros</h6>
                             <div class="row g-2">
                                 <div class="col-md-3">
-                                    <select class="form-select" id="filterField">
+                                    <select class="form-select" id="filterFieldHistorial">
                                         <option value="id">ID Secuencial</option>
-                                        <option value="fecha">Fecha Enviado</option>
-                                        <option value="canton">Cantón</option>
-                                        <option value="gad">GAD Parroquial</option>
                                         <option value="numero">Número de Oficio</option>
+                                        <option value="gad">GAD Parroquial</option>
+                                        <option value="canton">Cantón</option>
+                                        <option value="fecha">Fecha Enviado</option>
                                     </select>
                                 </div>
                                 <div class="col-md-6">
-                                    <input type="text" class="form-control" id="filterValue"
+                                    <input type="text" class="form-control" id="filterValueHistorial"
                                         placeholder="Ingrese valor de búsqueda">
                                 </div>
                             </div>
                         </div>
                         {% if historial %}
                         <div class="table-responsive">
-                            <table class="table table-hover" id="historial-registros">
+                            <table class="table table-hover table-sm align-middle" id="historial-registros">
                                 <thead>
                                     <tr>
                                         <th>ID</th>
@@ -141,37 +152,49 @@
                                 </thead>
                                 <tbody>
                                     {% for oficio in historial %}
-                                    <tr data-id="{{ oficio.id_secuencial }}" data-mongoid="{{ oficio._id }}"
-                                        data-fecha="{{ oficio.fecha_enviado_formatted }}"
-                                        data-canton="{{ oficio.canton|lower }}"
+                                    <tr data-id="{{ oficio.id_secuencial }}"
+                                        data-mongoid="{{ oficio._id }}"
+                                        data-numero="{{ oficio.numero_oficio|lower }}"
                                         data-gad="{{ oficio.gad_parroquial|lower }}"
-                                        data-numero="{{ oficio.numero_oficio|lower }}">
+                                        data-canton="{{ oficio.canton|lower }}"
+                                        data-fecha="{{ oficio.fecha_enviado_traditional }}">
                                         <td>{{ oficio.id_secuencial }}</td>
                                         <td>{{ oficio.numero_oficio }}</td>
                                         <td>{{ oficio.gad_parroquial }}</td>
                                         <td>{{ oficio.canton }}</td>
                                         <td>{{ oficio.detalle }}</td>
-                                        <td>{{ oficio.fecha_enviado_formatted }}</td>
-                                        <td>{{ oficio.fecha_recibido_formatted }}</td>
+                                        <td>{{ oficio.fecha_enviado_traditional }}</td>
+                                        <td>{{ oficio.fecha_recibido_traditional }}
                                         <td>
                                             <button class="btn btn-sm btn-primary edit-btn" data-bs-toggle="modal"
                                                 data-bs-target="#editModal" data-id="{{ oficio._id }}"
-                                                data-fecha-enviado="{{ oficio.fecha_enviado }}"
+                                                data-fecha-enviado="{{ oficio.fecha_enviado_traditional }}"
                                                 data-numero-oficio="{{ oficio.numero_oficio }}"
                                                 data-gad-parroquial="{{ oficio.gad_parroquial }}"
-                                                data-canton="{{ oficio.canton }}" data-detalle="{{ oficio.detalle }}"
-                                                data-assignments="{{ oficio.assignments | tojson }}">
+                                                data-canton="{{ oficio.canton }}"
+                                                data-detalle="{{ oficio.detalle }}"
+                                                data-archivo-nombre="{{ oficio.archivo_nombre or '' }}">
                                                 <i class="bi bi-pencil-square"></i>
                                             </button>
-                                            <form method="POST" action="{{ url_for('receive') }}"
-                                                style="display:inline;">
+                                            <form method="POST" action="{{ url_for('receive') }}" style="display:inline;">
                                                 <input type="hidden" name="delete_oficio" value="{{ oficio._id }}">
                                                 <button type="submit" class="btn btn-sm btn-danger"
                                                     onclick="return confirm('¿Estás seguro de eliminar este oficio?')">
                                                     <i class="bi bi-trash"></i>
                                                 </button>
                                             </form>
-
+                                            {% if oficio.archivo_nombre %}
+                                            <button type="button" class="btn btn-sm btn-info preview-btn"
+                                                data-bs-toggle="modal" data-bs-target="#previewModal"
+                                                data-id="{{ oficio._id }}"
+                                                data-archivo-nombre="{{ oficio.archivo_nombre }}">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                            <a href="{{ url_for('download', oficio_id=oficio._id) }}"
+                                                class="btn btn-sm btn-primary">
+                                                <i class="bi bi-download"></i>
+                                            </a>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -184,130 +207,380 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="editModalLabel">Editar Registro</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <!-- Seguimiento Panel -->
+            <div id="panel-seguimiento" class="fade-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-archive me-2"></i>Seguimiento de Oficios
                     </div>
-                    <div class="modal-body">
-                        <form method="POST" action="{{ url_for('receive') }}">
-                            <input type="hidden" name="edit_oficio" value="true">
-                            <input type="hidden" name="oficio_id" id="edit_oficio_id">
-                            <div class="mb-3">
-                                <label for="edit_fecha_enviado" class="form-label">Fecha Enviado</label>
-                                <input type="date" class="form-control" id="edit_fecha_enviado" name="fecha_enviado"
-                                    required>
+                    <div class="card-body">
+                        <p class="text-muted">Número de oficios: {{ oficios|length }}</p>
+                        <div class="mb-4">
+                            <h6>Filtrar Registros</h6>
+                            <div class="row g-2">
+                                <div class="col-md-3">
+                                    <select class="form-select" id="filterFieldSeguimiento">
+                                        <option value="id">ID Secuencial</option>
+                                        <option value="numero">Número de Oficio</option>
+                                        <option value="gad">GAD Parroquial</option>
+                                        <option value="canton">Cantón</option>
+                                        <option value="estado">Estado</option>
+                                        <option value="tecnico">Técnico</option>
+                                        <option value="tipo_asesoria">Tipo Asesoría</option>
+                                        <option value="sub_estado">Sub-Estado</option>
+                                        <option value="anexos">Anexos</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <input type="text" class="form-control" id="filterValueSeguimiento"
+                                        placeholder="Ingrese valor de búsqueda (True/False para Anexos)">
+                                </div>
                             </div>
-                            <div class="mb-3">
-                                <label for="edit_numero_oficio" class="form-label">Número de Oficio</label>
-                                <input type="text" class="form-control" id="edit_numero_oficio" name="numero_oficio"
-                                    required>
+                        </div>
+                        {% if oficios %}
+                        <!-- Indicadores de colores -->
+                        <div class="mb-3">
+                            <div class="d-flex flex-wrap gap-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-warning" style="width: 20px; height: 20px; border-radius: 3px;"></div>
+                                    <span class="ms-2 small">Pendiente - Sin asignar técnico</span>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-danger" style="width: 20px; height: 20px; border-radius: 3px;"></div>
+                                    <span class="ms-2 small">Asignado - Técnico asignado, sin trabajar</span>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-info" style="width: 20px; height: 20px; border-radius: 3px;"></div>
+                                    <span class="ms-2 small">Parcial - Algunos técnicos terminaron</span>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-success" style="width: 20px; height: 20px; border-radius: 3px;"></div>
+                                    <span class="ms-2 small">Concluido - Todos los técnicos terminaron</span>
+                                </div>
                             </div>
-                            <div class="mb-3">
-                                <label for="edit_gad_parroquial" class="form-label">GAD Parroquial</label>
-                                <select class="form-select" id="edit_gad_parroquial" name="gad_parroquial"
-                                    onchange="updateCantonEdit()" required>
-                                    <option value="">Seleccione...</option>
-                                    {% for parroquia in parroquias %}
-                                    <option value="{{ parroquia.parroquia }}">{{ parroquia.parroquia }}</option>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover table-sm align-middle" id="seguimiento-registros">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Número Oficio</th>
+                                        <th>Parroquia</th>
+                                        <th>Cantón</th>
+                                        <th>Estado</th>
+                                        <th>Técnico</th>
+                                        <th>Tipo Asesoría</th>
+                                        <th>Sub-Estado</th>
+                                        <th>Fecha Asesoría</th>
+                                        <th>Anexos</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for oficio in oficios %}
+                                    {% set assignments = oficio.assignments if oficio.assignments else [] %}
+                                    {% set tecnicos_list = [] %}
+                                    {% set tipos_list = [] %}
+                                    {% set sub_estados_list = [] %}
+                                    {% set fechas_list = [] %}
+                                    {% set anexos_list = [] %}
+                                    {% for assignment in assignments %}
+                                    {% for user in users %}
+                                    {% if user.username == assignment.tecnico %}
+                                    {% set _ = tecnicos_list.append(user.full_name) %}
+                                    {% endif %}
                                     {% endfor %}
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="edit_canton" class="form-label">Cantón</label>
-                                <input type="text" class="form-control" id="edit_canton" name="canton" readonly>
-                            </div>
-                            <div class="mb-3">
-                                <label for="edit_detalle" class="form-label">Detalle</label>
-                                <textarea class="form-control" id="edit_detalle" name="detalle" rows="4"></textarea>
-                            </div>
-                        </form>
+                                    {% set _ = tipos_list.append(assignment.tipo_asesoria) %}
+                                    {% set _ = sub_estados_list.append(assignment.sub_estado or 'Asignado') %}
+                                    {% set _ = fechas_list.append(assignment.fecha_asesoria_traditional or 'N/A') %}
+                                    {% set _ = anexos_list.append(assignment.anexo_nombre or '') %}
+                                    {% endfor %}
+                                    <tr data-id="{{ oficio.id_secuencial }}"
+                                        data-numero="{{ oficio.numero_oficio|lower }}"
+                                        data-gad="{{ oficio.gad_parroquial|lower }}"
+                                        data-canton="{{ oficio.canton|lower }}"
+                                        data-estado="{{ oficio.estado|lower }}"
+                                        data-tecnico="{{ tecnicos_list|join(',')|lower }}"
+                                        data-tipo_asesoria="{{ tipos_list|join(',')|lower }}"
+                                        data-sub_estado="{{ sub_estados_list|join(',')|lower }}"
+                                        data-anexos="{{ 'true' if anexos_list|select|list else 'false' }}"
+                                        class="{% if oficio.estado == 'pendiente' %}table-warning{% elif oficio.estado == 'completado' %}table-success{% elif oficio.estado == 'designado' %}{% set concluidos = assignments|selectattr('sub_estado', 'equalto', 'Concluido')|list %}{% set total = assignments|length %}{% if concluidos|length == total and total > 0 %}table-success{% elif concluidos|length > 0 %}table-info{% else %}table-danger{% endif %}{% endif %}">
+                                        <td>{{ oficio.id_secuencial }}</td>
+                                        <td>{{ oficio.numero_oficio }}</td>
+                                        <td>{{ oficio.gad_parroquial }}</td>
+                                        <td>{{ oficio.canton }}</td>
+                                        <td>{{ oficio.estado|capitalize }}</td>
+                                        <td>
+                                            {% if assignments %}
+                                            {% for assignment in assignments %}
+                                            {% for user in users %}
+                                            {% if user.username == assignment.tecnico %}
+                                            <div class="mb-1">{{ user.full_name }}</div>
+                                            {% endif %}
+                                            {% endfor %}
+                                            {% endfor %}
+                                            {% else %}
+                                            -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if assignments %}
+                                            {% for assignment in assignments %}
+                                            <div class="mb-1">{{ assignment.tipo_asesoria }}</div>
+                                            {% endfor %}
+                                            {% else %}
+                                            -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if assignments %}
+                                            {% for assignment in assignments %}
+                                            <div class="mb-1">{{ assignment.sub_estado or 'Asignado' }}</div>
+                                            {% endfor %}
+                                            {% else %}
+                                            -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if assignments %}
+                                            {% for assignment in assignments %}
+                                            <div class="mb-1">{{ assignment.fecha_asesoria_traditional or 'N/A' }}</div>
+                                            {% endfor %}
+                                            {% else %}
+                                            -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if assignments %}
+                                            {% for assignment in assignments %}
+                                            <div class="mb-1">
+                                                {{ 'True' if assignment.anexo_nombre else 'False' }}
+                                                {% if assignment.anexo_nombre %}
+                                                <a href="{{ url_for('download_anexo', oficio_id=oficio._id, tecnico=assignment.tecnico) }}"
+                                                    class="btn btn-sm btn-secondary ms-1">
+                                                    <i class="bi bi-paperclip"></i>
+                                                </a>
+                                                {% endif %}
+                                            </div>
+                                            {% endfor %}
+                                            {% else %}
+                                            False
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if assignments %}
+                                            <button type="button" class="btn btn-sm btn-success informe-btn"
+                                                data-bs-toggle="modal" data-bs-target="#informeModal"
+                                                onclick="showInforme('{{ oficio._id }}', '{{ oficio.numero_oficio }}', '{{ oficio.gad_parroquial }}', '{{ oficio.canton }}')">
+                                                <i class="bi bi-file-text"></i> Informe
+                                            </button>
+                                            {% endif %}
+                                            {% if oficio.archivo_nombre %}
+                                            <button type="button" class="btn btn-sm btn-info preview-btn"
+                                                data-bs-toggle="modal" data-bs-target="#previewModal"
+                                                data-id="{{ oficio._id }}"
+                                                data-archivo-nombre="{{ oficio.archivo_nombre }}">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                            <a href="{{ url_for('download', oficio_id=oficio._id) }}"
+                                                class="btn btn-sm btn-primary">
+                                                <i class="bi bi-download"></i>
+                                            </a>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted">Sin oficios para mostrar.</p>
+                        {% endif %}
                     </div>
                 </div>
             </div>
-        </div>
-        <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="confirmModalLabel">Confirmar Creación de Registro</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+
+            <!-- Edit Modal -->
+            <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="editModalLabel">Editar Registro</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form method="POST" action="{{ url_for('receive') }}" enctype="multipart/form-data" novalidate>
+                                <input type="hidden" name="edit_oficio" value="true">
+                                <input type="hidden" name="oficio_id" id="edit_oficio_id">
+                                <div class="mb-3">
+                                    <label for="edit_fecha_enviado" class="form-label">Fecha Enviado</label>
+                                    <input type="date" class="form-control" id="edit_fecha_enviado" name="fecha_enviado" placeholder="dd/mm/aaaa" required>
+                                    <div class="invalid-feedback">Por favor, seleccione una fecha.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="edit_numero_oficio" class="form-label">Número de Oficio</label>
+                                    <input type="text" class="form-control" id="edit_numero_oficio" name="numero_oficio" required>
+                                    <div class="invalid-feedback">Por favor, ingrese el número de oficio.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="edit_gad_parroquial" class="form-label">GAD Parroquial</label>
+                                    <select class="form-select" id="edit_gad_parroquial" name="gad_parroquial"
+                                        onchange="updateCantonEdit()" required>
+                                        <option value="">Seleccione...</option>
+                                        {% for parroquia in parroquias %}
+                                        <option value="{{ parroquia.parroquia }}">{{ parroquia.parroquia }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="invalid-feedback">Por favor, seleccione un GAD parroquial.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="edit_canton" class="form-label">Cantón</label>
+                                    <input type="text" class="form-control" id="edit_canton" name="canton" readonly required>
+                                    <div class="invalid-feedback">Por favor, seleccione un GAD parroquial para cargar el cantón.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="edit_detalle" class="form-label">Detalle</label>
+                                    <textarea class="form-control" id="edit_detalle" name="detalle" rows="4" required></textarea>
+                                    <div class="invalid-feedback">Por favor, ingrese el detalle.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="edit_archivo" class="form-label">Subir Archivo (PDF, opcional)</label>
+                                    <input type="file" class="form-control" id="edit_archivo" name="archivo" accept=".pdf">
+                                    <div id="current_archivo" class="form-text"></div>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                            </form>
+                        </div>
                     </div>
-                    <div class="modal-body">
-                        <p>Estás a punto de crear un registro con los siguientes datos:</p>
-                        <p><strong>Número de Oficio:</strong> <span id="confirm_numero_oficio"></span></p>
-                        <p><strong>Fecha de Recepción:</strong> <span id="confirm_fecha_enviado"></span></p>
-                        <p><strong>GAD Parroquial:</strong> <span id="confirm_gad_parroquial"></span></p>
-                        <p><strong>Cantón:</strong> <span id="confirm_canton"></span></p>
-                        <p><strong>Detalle:</strong> <span id="confirm_detalle"></span></p>
+                </div>
+            </div>
+
+            <!-- Confirm Modal -->
+            <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="confirmModalLabel">Confirmar Creación de Registro</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Estás a punto de crear un registro con los siguientes datos:</p>
+                            <p><strong>Número de Oficio:</strong> <span id="confirm_numero_oficio"></span></p>
+                            <p><strong>Fecha de Recepción:</strong> <span id="confirm_fecha_enviado"></span></p>
+                            <p><strong>GAD Parroquial:</strong> <span id="confirm_gad_parroquial"></span></p>
+                            <p><strong>Cantón:</strong> <span id="confirm_canton"></span></p>
+                            <p><strong>Detalle:</strong> <span id="confirm_detalle"></span></p>
+                            <p><strong>Archivo:</strong> <span id="confirm_archivo"></span></p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-primary" id="confirmSubmit">Aceptar</button>
+                        </div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="button" class="btn btn-primary" id="confirmSubmit">Aceptar</button>
+                </div>
+            </div>
+
+            <!-- Preview Modal -->
+            <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="previewModalLabel">Vista Previa del Oficio</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="previewContainer">
+                                <iframe id="previewFrame" style="width:100%;height:500px;" title="Vista previa del archivo"></iframe>
+                                <div id="previewError" class="d-none text-danger text-center">
+                                    No se puede mostrar la vista previa del archivo. Asegúrese de que el archivo sea un PDF válido o descárguelo para verlo.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Change Password Modal -->
+            <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel"
+                aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="changePasswordModalLabel">Cambiar Contraseña</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form method="POST" action="{{ url_for('change_password') }}" novalidate>
+                                <div class="mb-3">
+                                    <label for="old_password" class="form-label">Contraseña Anterior</label>
+                                    <input type="password" class="form-control" id="old_password" name="old_password" required>
+                                    <div class="invalid-feedback">Por favor, ingrese la contraseña anterior.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="new_password" class="form-label">Nueva Contraseña</label>
+                                    <input type="password" class="form-control" id="new_password" name="new_password" required>
+                                    <div class="invalid-feedback">Por favor, ingrese una nueva contraseña.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="confirm_password" class="form-label">Confirmar Nueva Contraseña</label>
+                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                                    <div class="invalid-feedback">Por favor, confirme la nueva contraseña.</div>
+                                </div>
+                                <button type="submit" class="btn btn-success">Guardar</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Informe Modal -->
+            <div class="modal fade" id="informeModal" tabindex="-1" aria-labelledby="informeModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="informeModalLabel">Informe de Actividades</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body" id="informeContent">
+                            <!-- Content will be loaded here -->
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inactivity Modal -->
+            <div class="modal fade" id="inactivityModal" tabindex="-1" aria-labelledby="inactivityModalLabel"
+                aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="inactivityModalLabel">Sesión por Expirar</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Tu sesión está a punto de expirar debido a inactividad. ¿Deseas continuar?</p>
+                            <div id="countdown" class="text-center text-danger fw-bold">60 segundos</div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" id="continueSession">Continuar</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"
+                                onclick="logoutUser()">Cerrar Sesión</button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel"
-            aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="changePasswordModalLabel">Cambiar Contraseña</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form method="POST" action="{{ url_for('change_password') }}">
-                            <div class="mb-3">
-                                <label for="old_password" class="form-label">Contraseña Anterior</label>
-                                <input type="password" class="form-control" id="old_password" name="old_password"
-                                    required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="new_password" class="form-label">Nueva Contraseña</label>
-                                <input type="password" class="form-control" id="new_password" name="new_password"
-                                    required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="confirm_password" class="form-label">Confirmar Nueva Contraseña</label>
-                                <input type="password" class="form-control" id="confirm_password"
-                                    name="confirm_password" required>
-                            </div>
-                            <button type="submit" class="btn btn-success">Guardar</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="modal fade" id="inactivityModal" tabindex="-1" aria-labelledby="inactivityModalLabel"
-        aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="inactivityModalLabel">Sesión por Expirar</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Tu sesión está a punto de expirar debido a inactividad. ¿Deseas continuar?</p>
-                    <div id="countdown" class="text-center text-danger fw-bold">60 segundos</div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" id="continueSession">Continuar</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"
-                        onclick="logoutUser()">Cerrar Sesión</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="{{ url_for('static', filename='script.js') }}"></script>
 
+    </body>
 </html>

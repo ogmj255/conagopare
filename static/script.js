@@ -1,64 +1,116 @@
+window.tecnicos = JSON.parse(document.getElementById('data-tecnicos')?.textContent || '[]');
+window.tipos_asesoria = JSON.parse(document.getElementById('data-tipos-asesoria')?.textContent || '[]');
+window.tecnicosData = window.tecnicos;
+window.tiposAsesoriaData = window.tipos_asesoria;
+
+function formatDateForInput(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('/');
+    if (parts.length !== 3) return '';
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    let year = parts[2];
+    if (year.length === 2) {
+        year = '20' + year;
+    }
+    if (isNaN(day) || isNaN(month) || isNaN(year) ||
+        day < 1 || day > 31 || month < 1 || month > 12 || year < 1900) {
+        return '';
+    }
+    return year + '-' + month + '-' + day;
+}
+
+function formatDateToTraditional(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return '';
+    const year = parts[0].slice(-2);
+    const month = parts[1].padStart(2, '0');
+    const day = parts[2].padStart(2, '0');
+    return day + '/' + month + '/' + year;
+}
+
 async function updateCanton() {
     const parroquia = document.getElementById('gad_parroquial')?.value;
-    if (parroquia) {
+    const cantonInput = document.getElementById('canton');
+    if (parroquia && cantonInput) {
         try {
             const response = await fetch('/get_canton', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ parroquia })
             });
-            if (!response.ok) throw new Error('Error en la petición');
+            if (!response.ok) throw new Error('Error en la petición: ' + response.status);
             const data = await response.json();
-            document.getElementById('canton').value = data.canton || '';
+            cantonInput.value = data.canton || '';
+            cantonInput.classList.remove('is-invalid');
         } catch (error) {
-            document.getElementById('canton').value = '';
+            console.error('Error in updateCanton:', error);
+            cantonInput.value = '';
+            cantonInput.classList.add('is-invalid');
         }
     } else {
-        document.getElementById('canton').value = '';
+        if (cantonInput) {
+            cantonInput.value = '';
+            cantonInput.classList.add('is-invalid');
+        }
     }
 }
-const flashes = document.querySelectorAll('.alert');
-flashes.forEach((flash, index) => {
-    flash.style.top = `${20 + (index * 80)}px`;
-    setTimeout(() => {
-        flash.style.animation = 'fadeOut 0.5s ease-in-out';
-        setTimeout(() => flash.remove(), 500);
-    }, 3000);
-});
+
+async function updateCantonEdit() {
+    const parroquia = document.getElementById('edit_gad_parroquial')?.value;
+    const cantonInput = document.getElementById('edit_canton');
+    if (parroquia && cantonInput) {
+        try {
+            const response = await fetch('/get_canton', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ parroquia })
+            });
+            if (!response.ok) throw new Error('Error fetching canton: ' + response.status);
+            const data = await response.json();
+            cantonInput.value = data.canton || '';
+            cantonInput.classList.remove('is-invalid');
+        } catch (error) {
+            console.error('Error in updateCantonEdit:', error);
+            cantonInput.value = '';
+            cantonInput.classList.add('is-invalid');
+        }
+    } else {
+        if (cantonInput) {
+            cantonInput.value = '';
+            cantonInput.classList.add('is-invalid');
+        }
+    }
+}
 
 async function fetchNotifications() {
+    const notificationCount = document.getElementById('notificationCount');
+    const notificationList = document.getElementById('notificationList');
+    if (!notificationCount || !notificationList) return;
+    
     try {
-        console.log('Fetching notifications...');
         const response = await fetch('/get_notifications', {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' }
         });
-        if (!response.ok) throw new Error(`Error fetching notifications: ${response.status}`);
+        if (!response.ok) throw new Error('Error fetching notifications: ' + response.status);
         const data = await response.json();
-        console.log('Notifications data:', data);
-
-        const notificationCount = document.getElementById('notificationCount');
-        const notificationList = document.getElementById('notificationList');
-        if (!notificationCount || !notificationList) {
-            console.error('Notification elements not found in DOM');
-            return;
-        }
 
         notificationCount.textContent = data.count || 0;
         notificationList.innerHTML = '';
         if (data.count === 0 || !data.notifications.length) {
             notificationList.innerHTML = '<li class="dropdown-item text-muted">No hay notificaciones</li>';
         } else {
-            data.notifications.forEach(notification => {
+            data.notifications.forEach(function(notification) {
                 const li = document.createElement('li');
                 li.className = 'dropdown-item';
-                li.innerHTML = `<strong>${notification.message}</strong><br><small>${notification.timestamp}</small>`;
+                li.innerHTML = '<strong>' + notification.message + '</strong><br><small>' + notification.timestamp + '</small>';
                 notificationList.appendChild(li);
             });
         }
     } catch (error) {
         console.error('Error in fetchNotifications:', error);
-        const notificationList = document.getElementById('notificationList');
         if (notificationList) {
             notificationList.innerHTML = '<li class="dropdown-item text-danger">Error al cargar notificaciones</li>';
         }
@@ -67,17 +119,13 @@ async function fetchNotifications() {
 
 async function clearNotifications() {
     try {
-        console.log('Clearing notifications...');
         const response = await fetch('/clear_notifications', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
         const data = await response.json();
-        console.log('Clear notifications response:', data);
         if (data.success) {
             await fetchNotifications();
-        } else {
-            console.error('Error clearing notifications:', data.error);
         }
     } catch (error) {
         console.error('Error in clearNotifications:', error);
@@ -86,391 +134,481 @@ async function clearNotifications() {
 
 function handleFlashes() {
     const flashes = document.querySelectorAll('.alert');
-    flashes.forEach((flash, index) => {
-        flash.style.top = `${20 + (index * 80)}px`;
+    flashes.forEach(function(flash, index) {
+        flash.style.top = (20 + (index * 80)) + 'px';
         flash.style.animation = 'fadeIn 0.5s ease-in-out';
-        setTimeout(() => {
+        setTimeout(function() {
             flash.style.animation = 'fadeOut 0.5s ease-in-out';
-            setTimeout(() => flash.remove(), 500);
+            setTimeout(function() { flash.remove(); }, 500);
         }, 3500);
     });
 }
-async function clearNotifications() {
-    try {
-        const response = await fetch('/clear_notifications', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        const data = await response.json();
-        if (data.success) {
-            fetchNotifications();
-        } else {
-            console.error('Error clearing notifications:', data.error);
+
+function addTechnicianPair(container, selectedTechnician, selectedAdvisory) {
+    selectedTechnician = selectedTechnician || '';
+    selectedAdvisory = selectedAdvisory || '';
+    
+    if (!window.tecnicosData || !window.tiposAsesoriaData) {
+        console.error('Datos de técnicos o asesorías no cargados');
+        return;
+    }
+
+    const tecnicoOptions = window.tecnicosData.map(function(tecnico) {
+        const selected = selectedTechnician === tecnico.username ? 'selected' : '';
+        return '<option value="' + tecnico.username + '" ' + selected + '>' + tecnico.full_name + '</option>';
+    }).join('');
+
+    const tipoOptions = window.tiposAsesoriaData.map(function(tipo) {
+        const selected = selectedAdvisory === tipo ? 'selected' : '';
+        return '<option value="' + tipo + '" ' + selected + '>' + tipo + '</option>';
+    }).join('');
+
+    const pairDiv = document.createElement('div');
+    pairDiv.className = 'tecnico-asesoria-pair mb-2';
+    pairDiv.innerHTML = '<div class="row g-2 align-items-center">' +
+        '<div class="col">' +
+        '<select name="tecnico_asignado[]" class="form-select form-select-sm" required>' +
+        '<option value="" disabled ' + (!selectedTechnician ? 'selected' : '') + '>Seleccione Técnico</option>' +
+        tecnicoOptions +
+        '</select>' +
+        '</div>' +
+        '<div class="col">' +
+        '<select name="tipo_asesoria[]" class="form-select form-select-sm" required>' +
+        '<option value="" disabled ' + (!selectedAdvisory ? 'selected' : '') + '>Tipo Asesoría</option>' +
+        tipoOptions +
+        '</select>' +
+        '</div>' +
+        '<div class="col-auto">' +
+        '<button type="button" class="btn btn-sm btn-danger remove-pair">X</button>' +
+        '</div>' +
+        '</div>';
+
+    container.appendChild(pairDiv);
+    
+    pairDiv.querySelector('.remove-pair').addEventListener('click', function() {
+        if (container.querySelectorAll('.tecnico-asesoria-pair').length > 1) {
+            pairDiv.remove();
         }
-    } catch (error) {
-        console.error('Error clearing notifications:', error);
+    });
+}
+
+function toggleEntregaFields(oficioId) {
+    const entregaRecepcion = document.getElementById('entrega_recepcion_' + oficioId);
+    if (entregaRecepcion) {
+        const entregaFields = document.querySelectorAll('#entrega_fields_' + oficioId + ', #acta_entrega_field_' + oficioId);
+        entregaFields.forEach(function(field) {
+            field.style.display = entregaRecepcion.value === 'Aplica' ? 'block' : 'none';
+        });
     }
 }
-document.addEventListener('DOMContentLoaded', () => {
-    fetchNotifications();
-    setInterval(fetchNotifications, 10000);
-});
 
-
-document.addEventListener('DOMContentLoaded', function () {
-    handleFlashes();
-    console.log('DOM fully loaded');
-
-    function showSection(sectionId) {
-        console.log('showSection called with sectionId:', sectionId);
-
-        document.querySelectorAll('.card-section').forEach(section => {
-            section.classList.remove('active');
-            section.classList.add('d-none');
-        });
-
-        const targetSection = document.getElementById(`section-${sectionId}`);
-        if (targetSection) {
-            targetSection.classList.remove('d-none');
-            targetSection.classList.add('active');
-            console.log(`Section ${sectionId} is now active`);
-        } else {
-            console.error(`Section with ID section-${sectionId} not found`);
-        }
-
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.classList.remove('active');
-        });
-        const activeLink = document.querySelector(`.nav-link[onclick="showSection('${sectionId}')"]`);
-        if (activeLink) {
-            activeLink.classList.add('active');
-            console.log(`Nav link for ${sectionId} set to active`);
-        }
-        localStorage.setItem('currentSection', sectionId);
-    }
-
-    function showPanel(panelId) {
-        document.querySelectorAll('.fade-panel').forEach(panel => panel.classList.remove('active'));
-        document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
-        const panelElement = document.getElementById(`panel-${panelId}`);
-        const tabElement = document.getElementById(`tab-${panelId}`);
-        if (panelElement && tabElement) {
-            panelElement.classList.add('active');
-            tabElement.classList.add('active');
-        }
-        localStorage.setItem('currentPanel', panelId);
-    }
-
-    function showPanel(panelId) {
-        document.querySelectorAll('.fade-panel').forEach(panel => {
-            panel.classList.remove('active');
-        });
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.classList.remove('active');
-        });
-        document.getElementById(`panel-${panelId}`).classList.add('active');
-        document.getElementById(`tab-${panelId}`).classList.add('active');
-    }
-
-
-    window.showSection = showSection;
-    window.showPanel = showPanel;
-
-
-    async function updateCantonEdit() {
-        const parroquia = document.getElementById('edit_gad_parroquial')?.value;
-        if (parroquia) {
-            try {
-                const response = await fetch('/get_canton', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ parroquia })
-                });
-                if (!response.ok) throw new Error('Error fetching canton');
-                const data = await response.json();
-                document.getElementById('edit_canton').value = data.canton || '';
-            } catch (error) {
-                console.error('Error in updateCantonEdit:', error);
-                document.getElementById('edit_canton').value = '';
-            }
-        } else {
-            document.getElementById('edit_canton').value = '';
-        }
-    }
-
-    window.updateCantonEdit = updateCantonEdit;
-
-    function addTechnicianPair(container, selectedTechnician = '', selectedAdvisory = '') {
-        const tecnicoOptions = Array.from(document.querySelectorAll('#tecnico-options option'))
-            .map(opt => `<option value="${opt.value}" ${selectedTechnician === opt.value ? 'selected' : ''}>${opt.text}</option>`)
-            .join('');
-        const tipoOptions = Array.from(document.querySelectorAll('#tipo-options option'))
-            .map(opt => `<option value="${opt.value}" ${selectedAdvisory === opt.value ? 'selected' : ''}>${opt.text}</option>`)
-            .join('');
-
-        const pairDiv = document.createElement('div');
-        pairDiv.className = 'tecnico-asesoria-pair mb-2';
-        pairDiv.innerHTML = `
-            <div class="row g-2 align-items-center">
-                <div class="col">
-                    <select name="tecnico_asignado[]" class="form-select form-select-sm" required>
-                        <option value="" disabled ${!selectedTechnician ? 'selected' : ''}>Seleccione Técnico</option>
-                        ${tecnicoOptions}
-                    </select>
-                </div>
-                <div class="col">
-                    <select name="tipo_asesoria[]" class="form-select form-select-sm" required>
-                        <option value="" disabled ${!selectedAdvisory ? 'selected' : ''}>Tipo Asesoría</option>
-                        ${tipoOptions}
-                    </select>
-                </div>
-                <div class="col-auto">
-                    <button type="button" class="btn btn-sm btn-danger remove-pair">X</button>
-                </div>
-            </div>
-        `;
-        container.appendChild(pairDiv);
-        pairDiv.querySelector('.remove-pair').addEventListener('click', () => {
-            if (container.querySelectorAll('.tecnico-asesoria-pair').length > 1) {
-                pairDiv.remove();
-            }
-        });
-    }
-
-    function toggleEntregaFields(oficioId) {
-        const entregaRecepcion = document.getElementById(`entrega_recepcion_${oficioId}`);
-        if (entregaRecepcion) {
-            const entregaFields = document.querySelectorAll(`#entrega_fields_${oficioId}, #acta_entrega_field_${oficioId}`);
-            entregaFields.forEach(field => {
-                field.style.display = entregaRecepcion.value === 'Aplica' ? 'block' : 'none';
-            });
-        }
-    }
-
-    window.toggleEntregaFields = toggleEntregaFields;
-
-    const staticModals = ['#editModal', '#confirmModal', '#changePasswordModal'];
-    staticModals.forEach(selector => {
-        const modal = document.querySelector(selector);
-        if (modal && !modal._bootstrapModal) {
-            new bootstrap.Modal(modal, {
-                backdrop: 'static',
-                keyboard: false
-            });
-        }
-    });
-
-    document.querySelectorAll('.entregar-btn').forEach(button => {
-        const modalId = button.getAttribute('data-modal-id') || `confirmEntregarModal_${button.getAttribute('data-id')}`;
-        button.addEventListener('click', () => {
-            console.log(`Opening modal: ${modalId}`);
-            const modal = document.getElementById(modalId);
-            if (modal) {
-                const bsModal = new bootstrap.Modal(modal, {
-                    backdrop: 'static',
-                    keyboard: false
-                });
-                bsModal.show();
-            } else {
-                console.error(`Modal with ID ${modalId} not found`);
-            }
-        });
-    });
-
-    document.querySelectorAll('.edit-btn').forEach(button => {
-        button.addEventListener('click', function () {
-            const id = button.getAttribute('data-id');
-            const fechaEnviado = button.getAttribute('data-fecha-enviado');
-            const numeroOficio = button.getAttribute('data-numero-oficio');
-            const gadParroquial = button.getAttribute('data-gad-parroquial');
-            const canton = button.getAttribute('data-canton');
-            const detalle = button.getAttribute('data-detalle');
-            const assignments = JSON.parse(button.getAttribute('data-assignments') || '[]');
-
-            console.log('Edit button clicked for oficio:', id);
-
-            document.getElementById('edit_oficio_id').value = id;
-            document.getElementById('edit_fecha_enviado').value = fechaEnviado;
-            document.getElementById('edit_numero_oficio').value = numeroOficio;
-            document.getElementById('edit_gad_parroquial').value = gadParroquial;
-            document.getElementById('edit_canton').value = canton;
-            document.getElementById('edit_detalle').value = detalle;
-
-            const pairContainer = document.getElementById('edit_tecnico_asesoria_pairs');
-            pairContainer.innerHTML = '';
-            assignments.forEach(assignment => {
-                addTechnicianPair(pairContainer, assignment.tecnico, assignment.tipo_asesoria);
-            });
-
-            if (assignments.length === 0) {
-                addTechnicianPair(pairContainer);
-            }
-        });
-    });
-
-    document.querySelectorAll('.add-pair').forEach(button => {
-        button.addEventListener('click', function () {
-            const pairContainer = document.getElementById('edit_tecnico_asesoria_pairs');
-            addTechnicianPair(pairContainer);
-        });
-    });
-
-    document.querySelectorAll('.add-pair').forEach(button => {
-        button.addEventListener('click', () => {
-            const oficioId = button.getAttribute('data-oficio-id');
-            const container = document.getElementById(`tecnico-asesoria-pairs-${oficioId}`);
-            if (container) {
-                addTechnicianPair(container);
-            }
-        });
-    });
-
-    window.enableEdit = function (tipoId) {
-        const input = document.getElementById(`input-tipo-${tipoId}`);
-        const saveButton = document.getElementById(`save-tipo-${tipoId}`);
+function enableEdit(tipoId) {
+    const input = document.getElementById('input-tipo-' + tipoId);
+    const saveButton = document.getElementById('save-tipo-' + tipoId);
+    if (input && saveButton) {
         input.readOnly = false;
         input.focus();
         saveButton.classList.remove('d-none');
-    };
+    }
+}
+
+function showPanel(panelId) {
+    document.querySelectorAll('.fade-panel').forEach(function(panel) {
+        panel.classList.remove('active');
+    });
+    document.querySelectorAll('.nav-link').forEach(function(link) {
+        link.classList.remove('active');
+    });
+    const panelElement = document.getElementById('panel-' + panelId);
+    const tabElement = document.getElementById('tab-' + panelId);
+    if (panelElement && tabElement) {
+        panelElement.classList.add('active');
+        tabElement.classList.add('active');
+        localStorage.setItem('currentPanel', panelId);
+    }
+}
+
+function showSection(sectionId) {
+    document.querySelectorAll('.card-section').forEach(function(section) {
+        section.classList.remove('active');
+        section.classList.add('d-none');
+    });
+    const targetSection = document.getElementById('section-' + sectionId);
+    if (targetSection) {
+        targetSection.classList.remove('d-none');
+        targetSection.classList.add('active');
+        localStorage.setItem('currentSection', sectionId);
+    }
+}
+
+function applyDesignFilters() {
+    const filterField = document.getElementById('filterField');
+    const filterValue = document.getElementById('filterValue');
+    const filterDateValue = document.getElementById('filterDateValue');
+    const tableRowsDesign = document.querySelectorAll('#designadosTable tbody tr');
+
+    if (!filterField || !tableRowsDesign.length) return;
+
+    const filterValueText = filterField.value === 'fecha' ?
+        (filterDateValue ? filterDateValue.value : '') :
+        (filterValue ? filterValue.value.toLowerCase() : '') || '';
+
+    tableRowsDesign.forEach(function(row) {
+        const id = (row.dataset.id || '').toLowerCase();
+        const numero = (row.dataset.numero || '').toLowerCase();
+        const tecnicos = (row.dataset.tecnicos || '').toLowerCase();
+        const tipos = (row.dataset.tipos || '').toLowerCase();
+        const fecha = row.dataset.fecha || '';
+
+        let shouldShow = true;
+
+        if (filterField.value && filterValueText) {
+            switch (filterField.value) {
+                case 'id':
+                    shouldShow = id.includes(filterValueText);
+                    break;
+                case 'numero':
+                    shouldShow = numero.includes(filterValueText);
+                    break;
+                case 'tecnico':
+                    shouldShow = tecnicos.includes(filterValueText);
+                    break;
+                case 'tipo':
+                    shouldShow = tipos.includes(filterValueText);
+                    break;
+                case 'fecha':
+                    shouldShow = fecha === filterValueText;
+                    break;
+                default:
+                    shouldShow = true;
+            }
+        }
+
+        row.style.display = shouldShow ? '' : 'none';
+    });
+}
+
+function toggleFilterInput() {
+    const filterField = document.getElementById('filterField');
+    const filterValue = document.getElementById('filterValue');
+    const filterDateValue = document.getElementById('filterDateValue');
+    if (!filterField || !filterValue || !filterDateValue) return;
+
+    if (filterField.value === 'fecha') {
+        filterValue.classList.add('d-none');
+        filterDateValue.classList.remove('d-none');
+    } else {
+        filterValue.classList.remove('d-none');
+        filterDateValue.classList.add('d-none');
+        filterDateValue.value = '';
+    }
+}
+
+function showConfirmModal() {
+    const registerForm = document.getElementById('registerForm');
+    if (!registerForm) return;
+    
+    if (!registerForm.checkValidity()) {
+        registerForm.classList.add('was-validated');
+        return;
+    }
+
+    const formData = new FormData(registerForm);
+    const fechaEnviadoRaw = document.getElementById('fecha_enviado').value;
+    const fechaEnviadoFormatted = formatDateToTraditional(fechaEnviadoRaw);
+    
+    document.getElementById('confirm_numero_oficio').textContent = formData.get('numero_oficio') || '';
+    document.getElementById('confirm_fecha_enviado').textContent = fechaEnviadoFormatted;
+    document.getElementById('confirm_gad_parroquial').textContent = formData.get('gad_parroquial') || '';
+    document.getElementById('confirm_canton').textContent = formData.get('canton') || '';
+    document.getElementById('confirm_detalle').textContent = formData.get('detalle') || 'Sin detalle';
+    document.getElementById('confirm_archivo').textContent = document.getElementById('archivo').files[0]?.name || 'Ningún archivo seleccionado';
+
+    const confirmModal = document.getElementById('confirmModal');
+    const bootstrapModal = confirmModal._bootstrapModal || new bootstrap.Modal(confirmModal, {
+        backdrop: 'static',
+        keyboard: false
+    });
+    bootstrapModal.show();
+}
+
+function filterTable(tableId, fieldId, valueId) {
+    const fieldElement = document.getElementById(fieldId);
+    const valueElement = document.getElementById(valueId);
+    const table = document.getElementById(tableId);
+    if (!fieldElement || !valueElement || !table) return;
+    
+    const field = fieldElement.value;
+    const value = valueElement.value.toLowerCase();
+    const rows = table.querySelectorAll('tbody tr');
+
+    rows.forEach(function(row) {
+        const cellValue = (row.getAttribute('data-' + field) || '').toLowerCase();
+        row.style.display = cellValue.includes(value) ? '' : 'none';
+    });
+}
+
+function showInforme(oficioId, numeroOficio, parroquia, canton) {
+    fetch('/get_oficio_informe/' + oficioId)
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (!data.success || !data.assignments) {
+                document.getElementById('informeContent').innerHTML = '<p class="text-muted">No hay información disponible.</p>';
+                return;
+            }
+
+            let content = '<div class="mb-3"><h6><strong>Oficio:</strong> ' + numeroOficio + '</h6><p><strong>Parroquia:</strong> ' + parroquia + ' - <strong>Cantón:</strong> ' + canton + '</p></div><hr>';
+
+            data.assignments.forEach(function(assignment, index) {
+                const badgeClass = assignment.sub_estado === 'Concluido' ? 'bg-success' : assignment.sub_estado === 'En proceso' ? 'bg-warning' : 'bg-danger';
+                
+                content += '<div class="mb-4">';
+                content += '<h6 class="text-primary">Técnico: ' + assignment.tecnico_name + '</h6>';
+                content += '<div class="row">';
+                content += '<div class="col-md-6">';
+                content += '<p><strong>Tipo Asesoría:</strong> ' + (assignment.tipo_asesoria || 'N/A') + '</p>';
+                content += '<p><strong>Estado:</strong> <span class="badge ' + badgeClass + '">' + (assignment.sub_estado || 'Asignado') + '</span></p>';
+                content += '<p><strong>Fecha Asesoría:</strong> ' + (assignment.fecha_asesoria_formatted || 'N/A') + '</p>';
+                content += '</div>';
+                content += '<div class="col-md-6">';
+                content += '<p><strong>Entrega Recepción:</strong> ' + (assignment.entrega_recepcion || 'No Aplica') + '</p>';
+                if (assignment.entrega_recepcion === 'Aplica') {
+                    content += '<p><strong>Oficio Delegación:</strong> ' + (assignment.oficio_delegacion || 'N/A') + '</p>';
+                    content += '<p><strong>Acta Entrega:</strong> ' + (assignment.acta_entrega || 'N/A') + '</p>';
+                }
+                content += '<p><strong>Anexo:</strong> ' + (assignment.anexo_nombre ? 'Sí' : 'No') + '</p>';
+                content += '</div>';
+                content += '</div>';
+                content += '<div class="mt-2">';
+                content += '<p><strong>Desarrollo de Actividad:</strong></p>';
+                content += '<div class="bg-light p-2 rounded">' + (assignment.desarrollo_actividad || 'Sin descripción') + '</div>';
+                content += '</div>';
+                if (index < data.assignments.length - 1) {
+                    content += '<hr>';
+                }
+                content += '</div>';
+            });
+
+            document.getElementById('informeContent').innerHTML = content;
+        })
+        .catch(function(error) {
+            console.error('Error in showInforme:', error);
+            document.getElementById('informeContent').innerHTML = '<p class="text-muted">Error al cargar la información.</p>';
+        });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const staticModals = ['#designModal', '#editModal', '#confirmModal', '#changePasswordModal', '#inactivityModal', '#previewModal'];
+    staticModals.forEach(function(selector) {
+        const modal = document.querySelector(selector);
+        if (modal && !modal._bootstrapModal) {
+            try {
+                modal._bootstrapModal = new bootstrap.Modal(modal, {
+                    backdrop: 'static',
+                    keyboard: false
+                });
+            } catch (error) {
+                console.error('Error initializing modal ' + selector + ':', error);
+            }
+        }
+    });
+
+    let inactivityTimeout;
+    let warningTimeout;
+    const inactivityTime = 15 * 60 * 1000;
+    const warningTime = 14 * 60 * 1000;
+
+    function resetInactivityTimer() {
+        clearTimeout(inactivityTimeout);
+        clearTimeout(warningTimeout);
+        warningTimeout = setTimeout(showWarning, warningTime);
+        inactivityTimeout = setTimeout(logoutUser, inactivityTime);
+    }
+
+    function showWarning() {
+        try {
+            const modal = document.getElementById('inactivityModal');
+            const bootstrapModal = modal._bootstrapModal || new bootstrap.Modal(modal, {
+                backdrop: 'static',
+                keyboard: false
+            });
+            const startTime = Date.now();
+            const countdownElement = document.getElementById('countdown');
+            countdownElement.textContent = '60 segundos';
+
+            const countdownInterval = setInterval(function() {
+                const elapsed = Date.now() - startTime;
+                const remaining = 60 - Math.floor(elapsed / 1000);
+                countdownElement.textContent = remaining + ' segundos';
+                if (remaining <= 0) {
+                    clearInterval(countdownInterval);
+                    bootstrapModal.hide();
+                    logoutUser();
+                }
+            }, 1000);
+
+            document.getElementById('continueSession').addEventListener('click', function() {
+                clearInterval(countdownInterval);
+                bootstrapModal.hide();
+                resetInactivityTimer();
+            });
+
+            bootstrapModal.show();
+        } catch (error) {
+            console.error('Error showing inactivity modal:', error);
+        }
+    }
+
+    async function logoutUser() {
+        try {
+            const response = await fetch('/logout', {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include'
+            });
+            if (response.ok) {
+                window.location.href = '/login';
+            }
+        } catch (error) {
+            console.error('Error in logoutUser:', error);
+            window.location.href = '/login';
+        }
+    }
+
+    ['click', 'mousemove', 'keypress', 'scroll', 'touchstart'].forEach(function(event) {
+        document.addEventListener(event, resetInactivityTimer, true);
+    });
+    resetInactivityTimer();
+    handleFlashes();
 
     const registerForm = document.getElementById('registerForm');
     if (registerForm) {
-        registerForm.addEventListener('submit', function (e) {
+        registerForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            const numeroOficio = document.getElementById('numero_oficio').value;
-            const fechaEnviado = document.getElementById('fecha_enviado').value;
-            const gadParroquial = document.getElementById('gad_parroquial').value;
-            const canton = document.getElementById('canton').value;
-            const detalle = document.getElementById('detalle').value;
-
-            document.getElementById('confirm_numero_oficio').textContent = numeroOficio;
-            document.getElementById('confirm_fecha_enviado').textContent = fechaEnviado;
-            document.getElementById('confirm_gad_parroquial').textContent = gadParroquial;
-            document.getElementById('confirm_canton').textContent = canton;
-            document.getElementById('confirm_detalle').textContent = detalle;
-
-            const confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
-            confirmModal.show();
-
-            const confirmSubmit = document.getElementById('confirmSubmit');
-            if (confirmSubmit) {
-                confirmSubmit.onclick = () => {
-                    registerForm.submit();
-                };
-            }
+            showConfirmModal();
         });
     }
+    
+    const confirmSubmit = document.getElementById('confirmSubmit');
+    if (confirmSubmit) {
+        confirmSubmit.addEventListener('click', function() {
+            const form = document.getElementById('registerForm');
+            const confirmModal = document.getElementById('confirmModal');
+            const bootstrapModal = confirmModal._bootstrapModal || new bootstrap.Modal(confirmModal);
+            bootstrapModal.hide();
+            form.submit();
+        });
+    }
+
+    document.querySelectorAll('.edit-btn').forEach(function(button) {
+        button.addEventListener('click', function () {
+            const id = this.getAttribute('data-id');
+            const fechaEnviadoTraditional = this.getAttribute('data-fecha-enviado');
+            const fechaEnviadoForInput = formatDateForInput(fechaEnviadoTraditional);
+            const numeroOficio = this.getAttribute('data-numero-oficio');
+            const gadParroquial = this.getAttribute('data-gad-parroquial');
+            const canton = this.getAttribute('data-canton');
+            const detalle = this.getAttribute('data-detalle') || '';
+            let assignments;
+            try {
+                assignments = JSON.parse(this.getAttribute('data-assignments') || '[]');
+            } catch (e) {
+                console.error('Error parsing assignments:', e);
+                assignments = [];
+            }
+
+            const editModal = document.getElementById('editModal');
+            if (editModal) {
+                editModal.querySelector('#edit_oficio_id').value = id;
+                editModal.querySelector('#edit_fecha_enviado').value = fechaEnviadoForInput;
+                editModal.querySelector('#edit_numero_oficio').value = numeroOficio || '';
+                editModal.querySelector('#edit_gad_parroquial').value = gadParroquial || '';
+                editModal.querySelector('#edit_canton').value = canton || '';
+                editModal.querySelector('#edit_detalle').value = detalle;
+
+                updateCantonEdit();
+            }
+        });
+    });
+
+    document.addEventListener('click', function (e) {
+        if (e.target.classList.contains('remove-pair')) {
+            const pair = e.target.closest('.tecnico-asesoria-pair');
+            if (pair && pair.parentElement.querySelectorAll('.tecnico-asesoria-pair').length > 1) {
+                pair.remove();
+            } else {
+                const tecnicoSelect = pair.querySelector('select[name="tecnico_asignado[]"]');
+                const tipoSelect = pair.querySelector('select[name="tipo_asesoria[]"]');
+                if (tecnicoSelect) tecnicoSelect.selectedIndex = 0;
+                if (tipoSelect) tipoSelect.selectedIndex = 0;
+            }
+        }
+    });
+
+    document.addEventListener('submit', function (e) {
+        const form = e.target;
+        if (form.id === 'designForm' || form.querySelector('button[name="designar"]') || form.querySelector('button[name="edit_oficio"]')) {
+            const tecnicos = form.querySelectorAll('select[name="tecnico_asignado[]"]');
+            const tipos = form.querySelectorAll('select[name="tipo_asesoria[]"]');
+
+            let hasValidPair = false;
+            for (let i = 0; i < tecnicos.length; i++) {
+                if (tecnicos[i].value && tipos[i] && tipos[i].value) {
+                    hasValidPair = true;
+                    break;
+                }
+            }
+
+            if (!hasValidPair) {
+                e.preventDefault();
+                alert('Debe seleccionar al menos un técnico y tipo de asesoría válidos.');
+                return false;
+            }
+        }
+    });
+
+    document.querySelectorAll('.preview-btn').forEach(function(button) {
+        button.addEventListener('click', function () {
+            const id = this.getAttribute('data-id');
+            const archivoNombre = this.getAttribute('data-archivo-nombre');
+            const previewFrame = document.getElementById('previewFrame');
+            const previewError = document.getElementById('previewError');
+            if (previewFrame && previewError) {
+                previewFrame.src = '';
+                previewError.classList.add('d-none');
+                if (archivoNombre && archivoNombre.toLowerCase().endsWith('.pdf')) {
+                    previewFrame.src = '/preview/' + id;
+                } else {
+                    previewError.classList.remove('d-none');
+                }
+            }
+        });
+    });
 
     const filterField = document.getElementById('filterField');
     const filterValue = document.getElementById('filterValue');
-    const tableRowsReceive = document.querySelectorAll('#historial-registros tbody tr');
+    const filterDateValue = document.getElementById('filterDateValue');
+    if (filterField && (filterValue || filterDateValue)) {
+        filterField.addEventListener('change', function() {
+            toggleFilterInput();
+            applyDesignFilters();
+        });
+        if (filterValue) filterValue.addEventListener('input', applyDesignFilters);
+        if (filterDateValue) filterDateValue.addEventListener('change', applyDesignFilters);
+    }
 
-    function applyDynamicFilter() {
-        const field = filterField.value;
-        const value = filterValue.value.toLowerCase();
-
-        tableRowsReceive.forEach(row => {
-            let rowValue = '';
-            switch (field) {
-                case 'id':
-                    rowValue = row.dataset.id?.toLowerCase() || '';
-                    break;
-                case 'fecha':
-                    rowValue = row.dataset.fecha?.toLowerCase() || '';
-                    break;
-                case 'canton':
-                    rowValue = row.dataset.canton?.toLowerCase() || '';
-                    break;
-                case 'gad':
-                    rowValue = row.dataset.gad?.toLowerCase() || '';
-                    break;
-                case 'numero':
-                    rowValue = row.dataset.numero?.toLowerCase() || '';
-                    break;
-            }
-            row.style.display = !value || rowValue.includes(value) ? '' : 'none';
+    const filterValueHistorial = document.getElementById('filterValueHistorial');
+    if (filterValueHistorial) {
+        filterValueHistorial.addEventListener('input', function() {
+            filterTable('historial-registros', 'filterFieldHistorial', 'filterValueHistorial');
         });
     }
 
-    if (filterField && filterValue) {
-        filterField.addEventListener('change', applyDynamicFilter);
-        filterValue.addEventListener('input', applyDynamicFilter);
-    }
-
-    if (filterId) filterId.addEventListener('input', applyReceiveFilters);
-    if (filterFecha) filterFecha.addEventListener('change', applyReceiveFilters);
-    if (filterCanton) filterCanton.addEventListener('input', applyReceiveFilters);
-    if (filterGad) filterGad.addEventListener('change', applyReceiveFilters);
-    if (filterNumeroOficio) filterNumeroOficio.addEventListener('input', applyReceiveFilters);
-
-
-    function applyDesignFilters() {
-        const idValue = filterIdDesign?.value.toLowerCase() || '';
-        const numeroValue = filterNumeroOficioDesign?.value.toLowerCase() || '';
-        const tecnicoValue = filterTecnicoDesign?.value.toLowerCase() || '';
-        const tipoValue = filterTipoAsesoriaDesign?.value.toLowerCase() || '';
-        const fechaValue = filterFechaDesign?.value || '';
-
-        const oficioGroups = {};
-        tableRowsDesign.forEach(row => {
-            const oficioId = row.dataset.oficioId;
-            if (oficioId) {
-                if (!oficioGroups[oficioId]) {
-                    oficioGroups[oficioId] = [];
-                }
-                oficioGroups[oficioId].push(row);
-            }
+    const filterValueSeguimiento = document.getElementById('filterValueSeguimiento');
+    if (filterValueSeguimiento) {
+        filterValueSeguimiento.addEventListener('input', function() {
+            filterTable('seguimiento-registros', 'filterFieldSeguimiento', 'filterValueSeguimiento');
         });
-
-        Object.values(oficioGroups).forEach(group => {
-            const firstRow = group[0];
-            const id = firstRow.dataset.id?.toLowerCase() || '';
-            const numero = firstRow.dataset.numero?.toLowerCase() || '';
-            const tecnicos = firstRow.dataset.tecnicos?.toLowerCase() || '';
-            const tipos = firstRow.dataset.tipos?.toLowerCase() || '';
-            const fecha = firstRow.dataset.fecha || '';
-
-            const idMatch = !idValue || id.includes(idValue);
-            const numeroMatch = !numeroValue || numero === numeroValue;
-            const tecnicoMatch = !tecnicoValue || tecnicos.includes(tecnicoValue);
-            const tipoMatch = !tipoValue || tipos.includes(tipoValue);
-            const fechaMatch = !fechaValue || (fecha && new Date(fecha).toISOString().split('T')[0] === fechaValue);
-
-            const shouldShow = idMatch && numeroMatch && tecnicoMatch && tipoMatch && fechaMatch;
-
-            group.forEach(row => {
-                row.style.display = shouldShow ? '' : 'none';
-            });
-        });
-
-        console.log('Filtros de design aplicados:', { idValue, numeroValue, tecnicoValue, tipoValue, fechaValue });
-    }
-
-    if (filterIdDesign) filterIdDesign.addEventListener('input', applyDesignFilters);
-    if (filterNumeroOficioDesign) filterNumeroOficioDesign.addEventListener('input', applyDesignFilters);
-    if (filterTecnicoDesign) filterTecnicoDesign.addEventListener('change', applyDesignFilters);
-    if (filterTipoAsesoriaDesign) filterTipoAsesoriaDesign.addEventListener('change', applyDesignFilters);
-    if (filterFechaDesign) filterFechaDesign.addEventListener('change', applyDesignFilters);
-
-    if (filterId || filterFecha || filterCanton || filterGad || filterNumeroOficio) {
-        applyReceiveFilters();
-    }
-    if (filterIdDesign || filterNumeroOficioDesign || filterTecnicoDesign || filterTipoAsesoriaDesign || filterFechaDesign) {
-        applyDesignFilters();
-    }
-
-    const currentSection = localStorage.getItem('currentSection');
-    if (currentSection && document.getElementById(`section-${currentSection}`)) {
-        showSection(currentSection);
-    } else {
-        showSection('oficios');
-    }
-
-    const currentPanel = localStorage.getItem('currentPanel');
-    if (currentPanel && document.getElementById(`panel-${currentPanel}`)) {
-        showPanel(currentPanel);
-    } else if (document.getElementById('panel-pendientes') || document.getElementById('panel-asignados')) {
-        showPanel('asignados');
     }
 
     fetchNotifications();
@@ -481,231 +619,23 @@ document.addEventListener('DOMContentLoaded', function () {
         clearNotificationsBtn.addEventListener('click', clearNotifications);
     }
 
-    document.getElementById('asignar_tecnico').addEventListener('change', function () {
-        const tecnicoContainer = document.getElementById('tecnico_container');
-        const tecnicoSelect = document.getElementById('tecnico');
-        if (this.value === 'sí') {
-            tecnicoContainer.style.display = 'block';
-            tecnicoSelect.setAttribute('required', 'required');
-        } else {
-            tecnicoContainer.style.display = 'none';
-            tecnicoSelect.removeAttribute('required');
-            tecnicoSelect.value = '';
-        }
-    });
-
-    document.getElementById('asignar_tecnico').addEventListener('change', function () {
-        const tecnicoContainer = document.getElementById('tecnico_container');
-        const tecnicoSelect = document.getElementById('tecnico');
-        if (this.value === 'sí') {
-            tecnicoContainer.style.display = 'block';
-            tecnicoSelect.setAttribute('required', 'required');
-        } else {
-            tecnicoContainer.style.display = 'none';
-            tecnicoSelect.removeAttribute('required');
-            tecnicoSelect.value = '';
-        }
-    });
-
-    document.getElementById('edit_asignar_tecnico').addEventListener('change', function () {
-        const tecnicoContainer = document.getElementById('edit_tecnico_container');
-        const tecnicoSelect = document.getElementById('edit_tecnico');
-        if (this.value === 'sí') {
-            tecnicoContainer.style.display = 'block';
-            tecnicoSelect.setAttribute('required', 'required');
-        } else {
-            tecnicoContainer.style.display = 'none';
-            tecnicoSelect.removeAttribute('required');
-            tecnicoSelect.value = '';
-        }
-    });
-
-    document.querySelectorAll('.edit-btn').forEach(button => {
-        button.addEventListener('click', function () {
-            const modal = document.getElementById('editModal');
-            modal.querySelector('#edit_product_id').value = this.dataset.id;
-            modal.querySelector('#edit_codigo').value = this.dataset.codigo;
-            modal.querySelector('#edit_tipo').value = this.dataset.tipo;
-            modal.querySelector('#edit_color').value = this.dataset.color;
-            modal.querySelector('#edit_marca').value = this.dataset.marca;
-            modal.querySelector('#edit_modelo').value = this.dataset.modelo;
-            modal.querySelector('#edit_estado').value = this.dataset.estado;
-            modal.querySelector('#edit_detalle').value = this.dataset.detalle;
-            const asignarTecnico = this.dataset.tecnico ? 'sí' : 'no';
-            modal.querySelector('#edit_asignar_tecnico').value = asignarTecnico;
-            modal.querySelector('#edit_tecnico_container').style.display = asignarTecnico === 'sí' ? 'block' : 'none';
-            modal.querySelector('#edit_tecnico').value = this.dataset.tecnico || '';
-            modal.querySelector('#current_imagen').textContent = this.dataset.imagen || 'Sin imagen';
-        });
-    });
-
-    document.getElementById('filterTecnico').addEventListener('change', filterTable);
-    document.getElementById('filterTipo').addEventListener('change', filterTable);
-    document.getElementById('filterSearch').addEventListener('input', filterTable);
-
-    function filterTable() {
-        const tecnicoFilter = document.getElementById('filterTecnico').value.toLowerCase();
-        const tipoFilter = document.getElementById('filterTipo').value.toLowerCase();
-        const searchFilter = document.getElementById('filterSearch').value.toLowerCase();
-        const rows = document.querySelectorAll('#inventoryTable tbody tr');
-
-        rows.forEach(row => {
-            const tecnico = row.dataset.tecnico || '';
-            const tipo = row.dataset.tipo;
-            const search = row.dataset.search;
-            const tecnicoMatch = !tecnicoFilter || tecnico === tecnicoFilter;
-            const tipoMatch = !tipoFilter || tipo === tipoFilter;
-            const searchMatch = !searchFilter || search.includes(searchFilter);
-            row.style.display = tecnicoMatch && tipoMatch && searchMatch ? '' : 'none';
-        });
-    }
-
-
-});
-
-let inactivityTimeout;
-let warningTimeout;
-const inactivityTime = 15 * 60 * 1000; // 5 segundos para pruebas
-const warningTime = 14 * 60 * 1000;    // 4 segundos para pruebas
-
-function resetInactivityTimer() {
-    clearTimeout(inactivityTimeout);
-    clearTimeout(warningTimeout);
-    warningTimeout = setTimeout(showWarning, warningTime);
-    inactivityTimeout = setTimeout(logoutUser, inactivityTime);
-}
-
-function showWarning() {
-        const modal = new bootstrap.Modal(document.getElementById('inactivityModal'), {
-            backdrop: 'static',
-            keyboard: false
-        });
-        const startTime = Date.now();
-        const countdownElement = document.getElementById('countdown');
-        countdownElement.textContent = `60 segundos`;
-
-        const countdownInterval = setInterval(() => {
-            const elapsed = Date.now() - startTime;
-            const remaining = 60 - Math.floor(elapsed / 1000);
-            countdownElement.textContent = `${remaining} segundos`;
-            if (remaining <= 0) {
-                clearInterval(countdownInterval);
-                modal.hide();
-                logoutUser();
-            }
-        }, 1000);
-
-        document.getElementById('continueSession').addEventListener('click', () => {
-            clearInterval(countdownInterval);
-            modal.hide();
-            resetInactivityTimer();
-        });
-
-        modal.show();
-    }
-
-async function logoutUser() {
-        try {
-            console.log('Intentando cerrar sesión...');
-            const response = await fetch('/logout', {
-                method: 'GET',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include'
-            });
-            console.log('Respuesta del servidor:', response.status, response.statusText);
-            if (response.ok) {
-                console.log('Cierre de sesión exitoso, redirigiendo a /login');
-                window.location.href = '/login';
-            } else {
-                console.error('Error en el servidor al cerrar sesión:', response.status, await response.text());
-            }
-        } catch (error) {
-            console.error('Error al cerrar sesión:', error);
-            window.location.href = '/login';
-        }
-    }
-
-    ['click', 'mousemove', 'keypress', 'scroll', 'touchstart'].forEach(event => {
-        document.addEventListener(event, resetInactivityTimer, true);
-    });
-
-    window.addEventListener('load', resetInactivityTimer);
-
-function toggleFilterInput() {
-    const filterField = document.getElementById('filterField').value;
-    const filterValue = document.getElementById('filterValue');
-    const filterDateValue = document.getElementById('filterDateValue');
-
-    if (filterField === 'fecha') {
-        filterValue.classList.add('d-none');
-        filterDateValue.classList.remove('d-none');
+    const currentPanel = localStorage.getItem('currentPanel');
+    if (currentPanel && document.getElementById('panel-' + currentPanel)) {
+        showPanel(currentPanel);
     } else {
-        filterValue.classList.remove('d-none');
-        filterDateValue.classList.add('d-none');
-        filterDateValue.value = '';
+        showPanel('registrar');
     }
-}
 
-function applyDesignFilters() {
-    const filterField = document.getElementById('filterField').value;
-    const filterValue = filterField === 'fecha' ?
-        document.getElementById('filterDateValue').value :
-        document.getElementById('filterValue').value.toLowerCase();
-    const tableRowsDesign = document.querySelectorAll('#designadosTable tbody tr');
-
-    const oficioGroups = {};
-    tableRowsDesign.forEach(row => {
-        const oficioId = row.dataset.oficioId;
-        if (oficioId) {
-            if (!oficioGroups[oficioId]) {
-                oficioGroups[oficioId] = [];
-            }
-            oficioGroups[oficioId].push(row);
-        }
-    });
-
-    Object.values(oficioGroups).forEach(group => {
-        const firstRow = group[0];
-        const id = firstRow.dataset.id?.toLowerCase() || '';
-        const numero = firstRow.dataset.numero?.toLowerCase() || '';
-        const tecnicos = firstRow.dataset.tecnicos?.toLowerCase() || '';
-        const tipos = firstRow.dataset.tipos?.toLowerCase() || '';
-        const fecha = firstRow.dataset.fecha || '';
-
-        let shouldShow = false;
-        switch (filterField) {
-            case 'id':
-                shouldShow = !filterValue || id.includes(filterValue);
-                break;
-            case 'numero':
-                shouldShow = !filterValue || numero.includes(filterValue);
-                break;
-            case 'tecnico':
-                shouldShow = !filterValue || tecnicos.includes(filterValue);
-                break;
-            case 'tipo':
-                shouldShow = !filterValue || tipos.includes(filterValue);
-                break;
-            case 'fecha':
-                shouldShow = !filterValue || (fecha && fecha === filterValue);
-                break;
-        }
-        group.forEach(row => {
-            row.style.display = shouldShow ? '' : 'none';
-        });
-    });
-
-    console.log('Filtros de design aplicados:', { filterField, filterValue, sampleId: tableRowsDesign[0]?.dataset.id });
-}
-
-const filterFieldElement = document.getElementById('filterField');
-const filterValueElement = document.getElementById('filterValue');
-const filterDateValueElement = document.getElementById('filterDateValue');
-if (filterFieldElement && filterValueElement && filterDateValueElement) {
-    filterFieldElement.addEventListener('change', () => {
-        toggleFilterInput();
-        applyDesignFilters();
-    });
-    filterValueElement.addEventListener('input', applyDesignFilters);
-    filterDateValueElement.addEventListener('change', applyDesignFilters);
-}
+    window.showPanel = showPanel;
+    window.showSection = showSection;
+    window.updateCanton = updateCanton;
+    window.updateCantonEdit = updateCantonEdit;
+    window.toggleEntregaFields = toggleEntregaFields;
+    window.enableEdit = enableEdit;
+    window.addTechnicianPair = addTechnicianPair;
+    window.logoutUser = logoutUser;
+    window.showInforme = showInforme;
+    window.showConfirmModal = showConfirmModal;
+    window.filterTable = filterTable;
+    window.handleFlashes = handleFlashes;
+});

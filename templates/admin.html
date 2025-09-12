@@ -18,22 +18,22 @@
                 <div class="navbar-brand mb-4 text-center">Conagopare Admin</div>
                 <ul class="nav flex-column">
                     <li class="nav-item mb-2">
-                        <a class="nav-link active" href="#" onclick="showSection('oficios')">
+                        <a class="nav-link {{ 'active' if current_section == 'oficios' else '' }}" href="#" onclick="showSection('oficios')">
                             <i class="bi bi-archive me-2"></i>Resumen de Oficios
                         </a>
                     </li>
                     <li class="nav-item mb-2">
-                        <a class="nav-link" href="#" onclick="showSection('usuarios')">
+                        <a class="nav-link {{ 'active' if current_section == 'usuarios' else '' }}" href="#" onclick="showSection('usuarios')">
                             <i class="bi bi-people me-2"></i>Gestión de Usuarios
                         </a>
                     </li>
                     <li class="nav-item mb-2">
-                        <a class="nav-link" href="#" onclick="showSection('tipos_asesoria')">
+                        <a class="nav-link {{ 'active' if current_section == 'tipos_asesoria' else '' }}" href="#" onclick="showSection('tipos_asesoria')">
                             <i class="bi bi-list-check me-2"></i>Gestión de Tipos de Asesoría
                         </a>
                     </li>
                     <li class="nav-item mb-2">
-                        <a class="nav-link" href="#" onclick="showSection('parroquias')">
+                        <a class="nav-link {{ 'active' if current_section == 'parroquias' else '' }}" href="#" onclick="showSection('parroquias')">
                             <i class="bi bi-geo-alt me-2"></i>Gestión de Parroquias
                         </a>
                     </li>
@@ -57,7 +57,7 @@
                     {% endif %}
                     {% endwith %}
 
-                    <div id="section-oficios" class="card card-section active">
+                    <div id="section-oficios" class="card card-section {{ 'active' if current_section == 'oficios' else 'd-none' }}">
                         <div class="card-header bg-primary text-white">
                             <i class="bi bi-archive me-2"></i>Resumen de Oficios
                         </div>
@@ -75,6 +75,7 @@
                                             <th>Fecha Recibido</th>
                                             <th>Fecha Enviado</th>
                                             <th>Fecha Designación</th>
+                                            <th>Anexos</th>
                                             <th>Acciones</th>
                                         </tr>
                                     </thead>
@@ -93,10 +94,46 @@
                                                 Pendiente
                                                 {% endif %}
                                             </td>
-                                            <td>{{ oficio.sub_estado or 'N/A' }}</td>
+                                            <td>
+                                                {% if oficio.assignments %}
+                                                {% for a in oficio.assignments %}
+                                                {{ a.sub_estado or 'Asignado' }}{% if not loop.last %}, {% endif %}
+                                                {% endfor %}
+                                                {% else %}
+                                                N/A
+                                                {% endif %}
+                                            </td>
                                             <td>{{ oficio.fecha_recibido_formatted }}</td>
                                             <td>{{ oficio.fecha_enviado_formatted }}</td>
                                             <td>{{ oficio.fecha_designacion_formatted or 'N/A' }}</td>
+                                            <td>
+                                                {% set has_anexo = false %}
+                                                {% for a in oficio.assignments %}
+                                                {% if a.anexo_nombre %}
+                                                {% set has_anexo = true %}
+                                                {% endif %}
+                                                {% endfor %}
+                                                {{ 'True' if has_anexo else 'False' }}
+                                                {% if has_anexo %}
+                                                <div>
+                                                    {% for a in oficio.assignments %}
+                                                    {% if a.anexo_nombre %}
+                                                    <button type="button" class="btn btn-primary btn-sm preview-btn"
+                                                        data-bs-toggle="modal" data-bs-target="#previewModal"
+                                                        data-id="{{ oficio._id }}"
+                                                        data-anexo-nombre="{{ a.anexo_nombre }}"
+                                                        data-anexo-tecnico="{{ a.tecnico }}">
+                                                        <i class="bi bi-eye"></i>
+                                                    </button>
+                                                    <a href="{{ url_for('download_anexo', oficio_id=oficio._id, tecnico=a.tecnico) }}"
+                                                        class="btn btn-info btn-sm" title="Descargar {{ a.anexo_nombre }}">
+                                                        <i class="bi bi-download"></i>
+                                                    </a>
+                                                    {% endif %}
+                                                {% endfor %}
+                                                </div>
+                                                {% endif %}
+                                            </td>
                                             <td>
                                                 <button type="button" class="btn btn-primary btn-sm edit-btn"
                                                     data-bs-toggle="modal" data-bs-target="#editModal"
@@ -111,12 +148,18 @@
                                                 </button>
                                                 <form method="POST" style="display:inline;">
                                                     <input type="hidden" name="oficio_id" value="{{ oficio._id }}">
+                                                    <input type="hidden" name="current_section" value="oficios">
                                                     <button type="submit" class="btn btn-danger btn-sm"
                                                         name="delete_oficio"
                                                         onclick="return confirm('¿Está seguro de eliminar este registro?')"><i
                                                             class="bi bi-trash"></i>
                                                     </button>
                                                 </form>
+                                                {% if oficio.archivo_nombre %}
+                                                <a href="{{ url_for('download', oficio_id=oficio._id) }}" class="btn btn-sm btn-info">
+                                                    <i class="bi bi-download"></i>
+                                                </a>
+                                                {% endif %}
                                             </td>
                                         </tr>
                                         {% endfor %}
@@ -129,13 +172,14 @@
                         </div>
                     </div>
 
-                    <div id="section-usuarios" class="card card-section d-none">
+                    <div id="section-usuarios" class="card card-section {{ 'active' if current_section == 'usuarios' else 'd-none' }}">
                         <div class="card-header bg-success text-white">
                             <i class="bi bi-people me-2"></i>Gestión de Usuarios
                         </div>
                         <div class="card-body">
                             <h5 class="card-title">Crear Usuario</h5>
                             <form method="POST" class="mb-4">
+                                <input type="hidden" name="current_section" value="usuarios">
                                 <div class="row g-3 mb-2">
                                     <div class="col-md-6">
                                         <input type="text" class="form-control" name="nombre" placeholder="Nombre"
@@ -189,6 +233,7 @@
                                         {% for user in users %}
                                         <form method="POST">
                                             <input type="hidden" name="user_id" value="{{ user._id }}">
+                                            <input type="hidden" name="current_section" value="usuarios">
                                             <tr>
                                                 <td>
                                                     <input type="text" class="form-control" name="nombre"
@@ -239,13 +284,14 @@
                         </div>
                     </div>
 
-                    <div id="section-tipos_asesoria" class="card card-section d-none">
+                    <div id="section-tipos_asesoria" class="card card-section {{ 'active' if current_section == 'tipos_asesoria' else 'd-none' }}">
                         <div class="card-header bg-info text-white">
                             <i class="bi bi-list-check me-2"></i>Gestión de Tipos de Asesoría
                         </div>
                         <div class="card-body">
                             <h5 class="card-title">Añadir Tipo de Asesoría</h5>
                             <form method="POST" class="mb-4">
+                                <input type="hidden" name="current_section" value="tipos_asesoria">
                                 <div class="mb-3">
                                     <input type="text" class="form-control" name="nombre"
                                         placeholder="Nombre del tipo de asesoría" required>
@@ -266,6 +312,7 @@
                                     <tr>
                                         <form method="POST" id="form-tipo-{{ tipo._id }}">
                                             <input type="hidden" name="tipo_id" value="{{ tipo._id }}">
+                                            <input type="hidden" name="current_section" value="tipos_asesoria">
                                             <td>
                                                 <input type="text" class="form-control" name="edit_nombre"
                                                     value="{{ tipo.nombre }}" id="input-tipo-{{ tipo._id }}" readonly
@@ -294,13 +341,14 @@
                         </div>
                     </div>
 
-                    <div id="section-parroquias" class="card card-section d-none">
+                    <div id="section-parroquias" class="card card-section {{ 'active' if current_section == 'parroquias' else 'd-none' }}">
                         <div class="card-header bg-info text-white">
                             <i class="bi bi-geo-alt me-2"></i>Gestión de Parroquias
                         </div>
                         <div class="card-body">
                             <h5 class="card-title">Añadir Parroquia</h5>
                             <form method="POST" class="mb-4">
+                                <input type="hidden" name="current_section" value="parroquias">
                                 <div class="mb-3">
                                     <input type="text" class="form-control" name="parroquia" placeholder="Parroquia"
                                         required>
@@ -315,6 +363,7 @@
                             {% for p in parroquias %}
                             <form method="POST" class="mb-3">
                                 <input type="hidden" name="parroquia_id" value="{{ p._id }}">
+                                <input type="hidden" name="current_section" value="parroquias">
                                 <div class="row g-3">
                                     <div class="col-md-4">
                                         <input type="text" class="form-control" name="edit_parroquia"
@@ -353,8 +402,9 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form method="POST" id="editForm">
+                    <form method="POST" id="editForm" enctype="multipart/form-data">
                         <input type="hidden" name="oficio_id" id="edit_oficio_id">
+                        <input type="hidden" name="current_section" value="oficios">
                         <div class="mb-3">
                             <label for="edit_fecha_enviado" class="form-label">Fecha Enviado</label>
                             <input type="date" class="form-control" name="fecha_enviado" id="edit_fecha_enviado"
@@ -390,8 +440,34 @@
                             <button type="button" class="btn btn-secondary btn-sm mt-2 add-pair">Añadir
                                 Asignación</button>
                         </div>
+                        <div class="mb-3">
+                            <label for="edit_archivo" class="form-label">Subir Archivo (opcional)</label>
+                            <input type="file" class="form-control" id="edit_archivo" name="archivo" accept=".pdf,.doc,.docx,.jpg,.png">
+                        </div>
                         <button type="submit" class="btn btn-primary" name="edit_oficio">Actualizar</button>
                     </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="previewModalLabel">Vista Previa del Anexo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="previewContainer">
+                        <iframe id="previewFrame" title="Vista previa del archivo" style="width: 100%; height: 500px;"></iframe>
+                        <div id="previewError" class="d-none text-danger text-center">
+                            No se puede mostrar la vista previa del archivo. Asegúrese de que el archivo sea un PDF válido o descárguelo para verlo.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>

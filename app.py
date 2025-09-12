@@ -1533,10 +1533,6 @@ def get_oficio_informe(oficio_id):
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)), debug=True)
-
     
 @app.route('/generate_report/<format>')
 @login_required
@@ -1693,3 +1689,5 @@ def generate_report(format):
     except Exception as e:
         flash(f'Error al generar informe: {str(e)}', 'error')
         return redirect(url_for('index'))
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)), debug=True)

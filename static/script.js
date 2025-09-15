@@ -84,6 +84,33 @@ async function updateCantonEdit() {
     }
 }
 
+async function updateTiposAsesoriaByTecnico(tecnicoSelect, tipoSelect) {
+    const tecnicoUsername = tecnicoSelect.value;
+    if (!tecnicoUsername || !tipoSelect) return;
+    
+    try {
+        const response = await fetch(`/get_tipos_asesoria_by_tecnico/${tecnicoUsername}`);
+        if (!response.ok) throw new Error('Error fetching tipos asesoria: ' + response.status);
+        const data = await response.json();
+        tipoSelect.innerHTML = '<option value="" disabled selected>Tipo Asesoría</option>';
+        data.tipos_asesoria.forEach(function(tipo) {
+            const option = document.createElement('option');
+            option.value = tipo;
+            option.textContent = tipo;
+            tipoSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error updating tipos asesoria:', error);
+        tipoSelect.innerHTML = '<option value="" disabled selected>Tipo Asesoría</option>';
+        window.tiposAsesoriaData.forEach(function(tipo) {
+            const option = document.createElement('option');
+            option.value = tipo;
+            option.textContent = tipo;
+            tipoSelect.appendChild(option);
+        });
+    }
+}
+
 async function fetchNotifications() {
     const notificationCount = document.getElementById('notificationCount');
     const notificationList = document.getElementById('notificationList');
@@ -104,9 +131,46 @@ async function fetchNotifications() {
         } else {
             data.notifications.forEach(function(notification) {
                 const li = document.createElement('li');
-                li.className = 'dropdown-item';
-                li.innerHTML = '<strong>' + notification.message + '</strong><br><small>' + notification.timestamp + '</small>';
+                const priorityClass = notification.priority === 'high' ? 'border-start border-danger border-3' : 
+                                    notification.priority === 'medium' ? 'border-start border-warning border-3' : '';
+                li.className = 'dropdown-item notification-item ' + priorityClass;
+                li.style.cursor = 'pointer';
+                
+                let content = '<div class="d-flex justify-content-between align-items-start">';
+                content += '<div class="notification-content flex-grow-1">';
+                content += '<div class="notification-message">' + notification.message + '</div>';
+                if (notification.details) {
+                    content += '<div class="notification-details text-muted small">' + notification.details + '</div>';
+                }
+                content += '<div class="notification-time text-muted small">' + notification.timestamp + '</div>';
+                content += '</div>';
+                content += '<div class="notification-actions ms-2">';
+                content += '<button class="btn btn-sm btn-outline-success me-1 mark-read-btn" data-id="' + notification.id + '" title="Marcar como leído"><i class="bi bi-check"></i></button>';
+                content += '<button class="btn btn-sm btn-outline-danger delete-btn" data-id="' + notification.id + '" title="Eliminar"><i class="bi bi-trash"></i></button>';
+                content += '</div>';
+                content += '</div>';
+                
+                li.innerHTML = content;
+                if (notification.oficio_id && notification.type === 'assignment') {
+                    li.addEventListener('click', function() {
+                        window.location.href = '/tecnico?default_view=asignados';
+                    });
+                } else if (notification.oficio_id && notification.type === 'new_oficio') {
+                    li.addEventListener('click', function() {
+                        window.location.href = '/design?default_view=pendientes';
+                    });
+                }
+                
                 notificationList.appendChild(li);
+                li.querySelector('.mark-read-btn').addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    markNotificationRead(notification.id);
+                });
+                
+                li.querySelector('.delete-btn').addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    deleteNotification(notification.id);
+                });
             });
         }
     } catch (error) {
@@ -129,6 +193,38 @@ async function clearNotifications() {
         }
     } catch (error) {
         console.error('Error in clearNotifications:', error);
+    }
+}
+
+async function markNotificationRead(notificationId) {
+    try {
+        const response = await fetch('/mark_notification_read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notification_id: notificationId })
+        });
+        const data = await response.json();
+        if (data.success) {
+            await fetchNotifications();
+        }
+    } catch (error) {
+        console.error('Error marking notification as read:', error);
+    }
+}
+
+async function deleteNotification(notificationId) {
+    try {
+        const response = await fetch('/delete_notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notification_id: notificationId })
+        });
+        const data = await response.json();
+        if (data.success) {
+            await fetchNotifications();
+        }
+    } catch (error) {
+        console.error('Error deleting notification:', error);
     }
 }
 
@@ -167,13 +263,13 @@ function addTechnicianPair(container, selectedTechnician, selectedAdvisory) {
     pairDiv.className = 'tecnico-asesoria-pair mb-2';
     pairDiv.innerHTML = '<div class="row g-2 align-items-center">' +
         '<div class="col">' +
-        '<select name="tecnico_asignado[]" class="form-select form-select-sm" required>' +
+        '<select name="tecnico_asignado[]" class="form-select form-select-sm tecnico-select" required>' +
         '<option value="" disabled ' + (!selectedTechnician ? 'selected' : '') + '>Seleccione Técnico</option>' +
         tecnicoOptions +
         '</select>' +
         '</div>' +
         '<div class="col">' +
-        '<select name="tipo_asesoria[]" class="form-select form-select-sm" required>' +
+        '<select name="tipo_asesoria[]" class="form-select form-select-sm tipo-select" required>' +
         '<option value="" disabled ' + (!selectedAdvisory ? 'selected' : '') + '>Tipo Asesoría</option>' +
         tipoOptions +
         '</select>' +
@@ -184,6 +280,19 @@ function addTechnicianPair(container, selectedTechnician, selectedAdvisory) {
         '</div>';
 
     container.appendChild(pairDiv);
+    
+    const tecnicoSelect = pairDiv.querySelector('.tecnico-select');
+    const tipoSelect = pairDiv.querySelector('.tipo-select');
+    tecnicoSelect.addEventListener('change', function() {
+        updateTiposAsesoriaByTecnico(tecnicoSelect, tipoSelect);
+    });
+    if (selectedTechnician) {
+        updateTiposAsesoriaByTecnico(tecnicoSelect, tipoSelect).then(function() {
+            if (selectedAdvisory) {
+                tipoSelect.value = selectedAdvisory;
+            }
+        });
+    }
     
     pairDiv.querySelector('.remove-pair').addEventListener('click', function() {
         if (container.querySelectorAll('.tecnico-asesoria-pair').length > 1) {
@@ -225,6 +334,10 @@ function showPanel(panelId) {
         panelElement.classList.add('active');
         tabElement.classList.add('active');
         localStorage.setItem('currentPanel', panelId);
+        const currentUrl = new URL(window.location);
+        currentUrl.searchParams.set('current_view', panelId);
+        window.history.replaceState({}, '', currentUrl);
+        document.body.setAttribute('data-current-view', panelId);
     }
 }
 
@@ -233,11 +346,21 @@ function showSection(sectionId) {
         section.classList.remove('active');
         section.classList.add('d-none');
     });
+    document.querySelectorAll('.sidebar .nav-link').forEach(function(link) {
+        link.classList.remove('active');
+    });
     const targetSection = document.getElementById('section-' + sectionId);
+    const targetLink = document.querySelector('.sidebar .nav-link[onclick="showSection(\'' + sectionId + '\')"');
     if (targetSection) {
         targetSection.classList.remove('d-none');
         targetSection.classList.add('active');
         localStorage.setItem('currentSection', sectionId);
+        const currentUrl = new URL(window.location);
+        currentUrl.searchParams.set('current_section', sectionId);
+        window.history.replaceState({}, '', currentUrl);
+    }
+    if (targetLink) {
+        targetLink.classList.add('active');
     }
 }
 
@@ -525,8 +648,45 @@ document.addEventListener('DOMContentLoaded', function () {
                 editModal.querySelector('#edit_gad_parroquial').value = gadParroquial || '';
                 editModal.querySelector('#edit_canton').value = canton || '';
                 editModal.querySelector('#edit_detalle').value = detalle;
+                
+                const archivoNombre = this.getAttribute('data-archivo-nombre');
+                const currentArchivoName = editModal.querySelector('#current_archivo_name');
+                if (currentArchivoName) {
+                    currentArchivoName.textContent = archivoNombre || 'Ninguno';
+                }
+
+                editModal.querySelector('#hidden_fecha_enviado').value = fechaEnviadoForInput;
+                editModal.querySelector('#hidden_numero_oficio').value = numeroOficio || '';
+                editModal.querySelector('#hidden_gad_parroquial').value = gadParroquial || '';
+                editModal.querySelector('#hidden_canton').value = canton || '';
+                editModal.querySelector('#hidden_detalle').value = detalle;
+
+                const editAssignments = editModal.querySelector('#editAssignments');
+                if (editAssignments) {
+                    editAssignments.innerHTML = '';
+                    if (assignments && assignments.length > 0) {
+                        assignments.forEach(function(assignment) {
+                            addTechnicianPair(editAssignments, assignment.tecnico, assignment.tipo_asesoria);
+                        });
+                    } else {
+                        addTechnicianPair(editAssignments);
+                    }
+                }
 
                 updateCantonEdit();
+            }
+        });
+    });
+
+    document.querySelectorAll('button[data-bs-target="#designModal"]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const oficioId = this.getAttribute('data-id');
+            const numeroOficio = this.getAttribute('data-numero-oficio');
+            
+            const designModal = document.getElementById('designModal');
+            if (designModal) {
+                designModal.querySelector('#design_oficio_id').value = oficioId || '';
+                designModal.querySelector('#design_numero_oficio').value = numeroOficio || '';
             }
         });
     });
@@ -545,27 +705,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    document.addEventListener('submit', function (e) {
-        const form = e.target;
-        if (form.id === 'designForm' || form.querySelector('button[name="designar"]') || form.querySelector('button[name="edit_oficio"]')) {
-            const tecnicos = form.querySelectorAll('select[name="tecnico_asignado[]"]');
-            const tipos = form.querySelectorAll('select[name="tipo_asesoria[]"]');
 
-            let hasValidPair = false;
-            for (let i = 0; i < tecnicos.length; i++) {
-                if (tecnicos[i].value && tipos[i] && tipos[i].value) {
-                    hasValidPair = true;
-                    break;
-                }
-            }
-
-            if (!hasValidPair) {
-                e.preventDefault();
-                alert('Debe seleccionar al menos un técnico y tipo de asesoría válidos.');
-                return false;
-            }
-        }
-    });
 
     document.querySelectorAll('.preview-btn').forEach(function(button) {
         button.addEventListener('click', function () {
@@ -619,11 +759,28 @@ document.addEventListener('DOMContentLoaded', function () {
         clearNotificationsBtn.addEventListener('click', clearNotifications);
     }
 
-    const currentPanel = localStorage.getItem('currentPanel');
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlCurrentView = urlParams.get('current_view');
+    const serverCurrentView = document.body.getAttribute('data-current-view');
+    const currentPanel = urlCurrentView || serverCurrentView || localStorage.getItem('currentPanel');
+    
     if (currentPanel && document.getElementById('panel-' + currentPanel)) {
         showPanel(currentPanel);
     } else {
-        showPanel('registrar');
+        const defaultViews = {
+            'receive': 'registrar',
+            'design': 'pendientes', 
+            'tecnico': 'asignados',
+            'admin': 'oficios',
+            'sistemas': 'add-product'
+        };
+        const currentRole = document.body.getAttribute('data-current-role');
+        const defaultView = defaultViews[currentRole] || 'registrar';
+        showPanel(defaultView);
+    }
+    const currentSection = serverCurrentView || localStorage.getItem('currentSection');
+    if (currentSection && document.getElementById('section-' + currentSection)) {
+        showSection(currentSection);
     }
 
     window.showPanel = showPanel;
@@ -638,4 +795,247 @@ document.addEventListener('DOMContentLoaded', function () {
     window.showConfirmModal = showConfirmModal;
     window.filterTable = filterTable;
     window.handleFlashes = handleFlashes;
+
+    function updateFormCurrentView() {
+        const currentView = localStorage.getItem('currentPanel') || document.body.getAttribute('data-current-view');
+        document.querySelectorAll('form').forEach(function(form) {
+            let currentViewInput = form.querySelector('input[name="current_view"]');
+            if (currentViewInput) {
+                currentViewInput.value = currentView;
+            } else if (currentView) {
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'current_view';
+                hiddenInput.value = currentView;
+                form.appendChild(hiddenInput);
+            }
+        });
+    }
+    updateFormCurrentView();
+    const originalShowPanel = window.showPanel;
+    window.showPanel = function(panelId) {
+        originalShowPanel(panelId);
+        updateFormCurrentView();
+    };
 });
+
+let sortHistorialAscending = true;
+
+function sortHistorialById() {
+    const table = document.getElementById('historial-registros');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const sortIcon = document.getElementById('sort-icon-historial');
+    
+    rows.sort(function(a, b) {
+        const aId = a.getAttribute('data-id');
+        const bId = b.getAttribute('data-id');
+        const [aYear, aNum] = aId.split('-').map(Number);
+        const [bYear, bNum] = bId.split('-').map(Number);
+        
+        if (aYear !== bYear) {
+            return sortHistorialAscending ? aYear - bYear : bYear - aYear;
+        }
+        return sortHistorialAscending ? aNum - bNum : bNum - aNum;
+    });
+    tbody.innerHTML = '';
+    rows.forEach(function(row) {
+        tbody.appendChild(row);
+    });
+    sortHistorialAscending = !sortHistorialAscending;
+    sortIcon.className = sortHistorialAscending ? 'bi bi-arrow-up' : 'bi bi-arrow-down';
+}
+
+window.sortHistorialById = sortHistorialById;
+
+let sortSeguimientoAscending = true;
+let sortPendientesAscending = true;
+let sortDesignadosAscending = true;
+let sortSeguimientoDesignAscending = true;
+
+function sortSeguimientoById() {
+    const table = document.getElementById('seguimiento-registros');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const sortIcon = document.getElementById('sort-icon-seguimiento');
+    
+    rows.sort(function(a, b) {
+        const aId = a.getAttribute('data-id');
+        const bId = b.getAttribute('data-id');
+        const [aYear, aNum] = aId.split('-').map(Number);
+        const [bYear, bNum] = bId.split('-').map(Number);
+        
+        if (aYear !== bYear) {
+            return sortSeguimientoAscending ? aYear - bYear : bYear - aYear;
+        }
+        return sortSeguimientoAscending ? aNum - bNum : bNum - aNum;
+    });
+    
+    tbody.innerHTML = '';
+    rows.forEach(function(row) {
+        tbody.appendChild(row);
+    });
+    
+    sortSeguimientoAscending = !sortSeguimientoAscending;
+    sortIcon.className = sortSeguimientoAscending ? 'bi bi-arrow-up' : 'bi bi-arrow-down';
+}
+
+function sortPendientesById() {
+    const table = document.querySelector('#panel-pendientes table');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const sortIcon = document.getElementById('sort-icon-pendientes');
+    
+    rows.sort(function(a, b) {
+        const aId = a.getAttribute('data-id');
+        const bId = b.getAttribute('data-id');
+        const [aYear, aNum] = aId.split('-').map(Number);
+        const [bYear, bNum] = bId.split('-').map(Number);
+        
+        if (aYear !== bYear) {
+            return sortPendientesAscending ? aYear - bYear : bYear - aYear;
+        }
+        return sortPendientesAscending ? aNum - bNum : bNum - aNum;
+    });
+    
+    tbody.innerHTML = '';
+    rows.forEach(function(row) {
+        tbody.appendChild(row);
+    });
+    
+    sortPendientesAscending = !sortPendientesAscending;
+    sortIcon.className = sortPendientesAscending ? 'bi bi-arrow-up' : 'bi bi-arrow-down';
+}
+
+function sortDesignadosById() {
+    const table = document.getElementById('designadosTable');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const sortIcon = document.getElementById('sort-icon-designados');
+    
+    rows.sort(function(a, b) {
+        const aId = a.getAttribute('data-id');
+        const bId = b.getAttribute('data-id');
+        const [aYear, aNum] = aId.split('-').map(Number);
+        const [bYear, bNum] = bId.split('-').map(Number);
+        
+        if (aYear !== bYear) {
+            return sortDesignadosAscending ? aYear - bYear : bYear - aYear;
+        }
+        return sortDesignadosAscending ? aNum - bNum : bNum - aNum;
+    });
+    
+    tbody.innerHTML = '';
+    rows.forEach(function(row) {
+        tbody.appendChild(row);
+    });
+    
+    sortDesignadosAscending = !sortDesignadosAscending;
+    sortIcon.className = sortDesignadosAscending ? 'bi bi-arrow-up' : 'bi bi-arrow-down';
+}
+
+function sortSeguimientoDesignById() {
+    const table = document.querySelector('#panel-seguimiento table');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const sortIcon = document.getElementById('sort-icon-seguimiento-design');
+    
+    rows.sort(function(a, b) {
+        const aId = a.getAttribute('data-id');
+        const bId = b.getAttribute('data-id');
+        const [aYear, aNum] = aId.split('-').map(Number);
+        const [bYear, bNum] = bId.split('-').map(Number);
+        
+        if (aYear !== bYear) {
+            return sortSeguimientoDesignAscending ? aYear - bYear : bYear - aYear;
+        }
+        return sortSeguimientoDesignAscending ? aNum - bNum : bNum - aNum;
+    });
+    
+    tbody.innerHTML = '';
+    rows.forEach(function(row) {
+        tbody.appendChild(row);
+    });
+    
+    sortSeguimientoDesignAscending = !sortSeguimientoDesignAscending;
+    sortIcon.className = sortSeguimientoDesignAscending ? 'bi bi-arrow-up' : 'bi bi-arrow-down';
+}
+
+window.sortSeguimientoById = sortSeguimientoById;
+window.sortPendientesById = sortPendientesById;
+window.sortDesignadosById = sortDesignadosById;
+window.sortSeguimientoDesignById = sortSeguimientoDesignById;
+
+function updateEntregarForm(oficioId) {
+    const form = document.getElementById('form-' + oficioId);
+    const entregarForm = document.getElementById('entregar-form-' + oficioId);
+    
+    if (form && entregarForm) {
+        const formData = new FormData(form);
+        entregarForm.querySelector('input[name="desarrollo_actividad"]').value = formData.get('desarrollo_actividad') || '';
+        entregarForm.querySelector('input[name="fecha_asesoria"]').value = formData.get('fecha_asesoria') || '';
+        entregarForm.querySelector('input[name="sub_estado"]').value = formData.get('sub_estado') || 'Asignado';
+        entregarForm.querySelector('input[name="entrega_recepcion"]').value = formData.get('entrega_recepcion') || 'No Aplica';
+        entregarForm.querySelector('input[name="oficio_delegacion"]').value = formData.get('oficio_delegacion') || '';
+        entregarForm.querySelector('input[name="acta_entrega"]').value = formData.get('acta_entrega') || '';
+    }
+}
+
+
+
+function submitActualizarForm(oficioId) {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('confirmActualizarModal_' + oficioId));
+    modal.hide();
+    document.getElementById('form-' + oficioId).submit();
+}
+
+function confirmarEntrega(oficioId) {
+    const form = document.getElementById('form-' + oficioId);
+    const entregarInput = form.querySelector('input[name="entregar"]');
+    const modal = document.getElementById('confirmEntregarModal_' + oficioId);
+    
+    entregarInput.value = '1';
+    const bootstrapModal = bootstrap.Modal.getInstance(modal);
+    if (bootstrapModal) {
+        bootstrapModal.hide();
+    }
+    form.submit();
+}
+
+window.updateEntregarForm = updateEntregarForm;
+window.checkActualizarSubmission = checkActualizarSubmission;
+window.submitActualizarForm = submitActualizarForm;
+window.confirmarEntrega = confirmarEntrega;
+
+function validateAndShowEntregarModal(oficioId) {
+    const form = document.getElementById('form-' + oficioId);
+    const desarrollo = form.querySelector('textarea[name="desarrollo_actividad"]').value.trim();
+    const fecha = form.querySelector('input[name="fecha_asesoria"]').value;
+    const estado = form.querySelector('select[name="sub_estado"]').value;
+    const entregaRecepcion = form.querySelector('select[name="entrega_recepcion"]').value;
+    
+    let missingFields = [];
+    
+    if (!desarrollo) missingFields.push('Desarrollo de Actividad');
+    if (!fecha) missingFields.push('Fecha de Asesoría');
+    if (estado !== 'Concluido') missingFields.push('Estado (debe estar marcado como Concluido)');
+    
+    if (entregaRecepcion === 'Aplica') {
+        const oficioDelegacion = form.querySelector('input[name="oficio_delegacion"]').value.trim();
+        const actaEntrega = form.querySelector('input[name="acta_entrega"]').value.trim();
+        
+        if (!oficioDelegacion) missingFields.push('Oficio de Delegación');
+        if (!actaEntrega) missingFields.push('Acta de Entrega');
+    }
+    
+    if (missingFields.length > 0) {
+        alert('Para entregar debe completar los siguientes campos:\n\n• ' + missingFields.join('\n• '));
+        return;
+    }
+    
+    updateEntregarForm(oficioId);
+    const modal = new bootstrap.Modal(document.getElementById('confirmEntregarModal_' + oficioId));
+    modal.show();
+}
+
+window.validateAndShowEntregarModal = validateAndShowEntregarModal;

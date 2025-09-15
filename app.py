@@ -27,13 +27,44 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-client = MongoClient('mongodb+srv://ogmoscosoj:KcB4gSO579gBCSzY@conagoparedb.vwmlbqg.mongodb.net/?retryWrites=true&w=majority&appName=conagoparedb')
+mongo_uri = os.getenv('MONGODB_URI', 'mongodb+srv://ogmoscosoj:KcB4gSO579gBCSzY@conagoparedb.vwmlbqg.mongodb.net/?retryWrites=true&w=majority&appName=conagoparedb')
+local_uri = os.getenv('MONGODB_LOCAL_URI', 'mongodb://localhost:27017/')
+
+try:
+    print("Intentando conectar a MongoDB...")
+    client = MongoClient(
+        mongo_uri,
+        serverSelectionTimeoutMS=10000,
+        connectTimeoutMS=10000,
+        socketTimeoutMS=10000,
+        maxPoolSize=10,
+        retryWrites=True
+    )
+    client.admin.command('ping')
+    print("Conectado exitosamente a MongoDB Atlas")
+except Exception as e:
+    print(f"Error conectando a MongoDB Atlas: {e}")
+    print("Intentando conexión local...")
+    try:
+        client = MongoClient(local_uri, serverSelectionTimeoutMS=5000)
+        client.admin.command('ping')
+        print("Conectado exitosamente a MongoDB local")
+    except Exception as local_e:
+        print(f"Error conectando a MongoDB local: {local_e}")
+        print("\n=== SOLUCIÓN ===\n")
+        print("1. Verifique su conexión a internet")
+        print("2. O instale MongoDB localmente: https://www.mongodb.com/try/download/community")
+        print("3. O configure la variable MONGODB_URI en el archivo .env")
+        exit(1)
+
 db_oficios = client['conagoparedb']
 oficios = db_oficios['oficios']
 parroquias = db_oficios['parroquias']
 users = db_oficios['users_db']
 notifications = db_oficios['notifications']
 tipos_asesoria_coll = db_oficios['tipos_asesoria']
+logs = db_oficios['logs']
+errors = db_oficios['errors']
 fs = GridFS(db_oficios)
 
 class User(UserMixin):
@@ -51,9 +82,10 @@ def load_user(username):
 
 try:
     client.admin.command('ping')
-    print("Pinged your deployment. You successfully connected to MongoDB!")
+    print("Conexión a MongoDB verificada exitosamente")
 except Exception as e:
-    print(f"MongoDB connection error: {e}")
+    print(f"Error de verificación de MongoDB: {e}")
+    exit(1)
 
 try:
     oficios.create_index([('id_secuencial', 1)], unique=True)
@@ -61,8 +93,63 @@ try:
 except Exception as e:
     print(f"Error al crear índice: {e}")
 
+def log_user_action(username, action, details, ip_address=None):
+    """Log user actions"""
+    try:
+        action_colors = {
+            'LOGIN': 'success',
+            'LOGOUT': 'secondary',
+            'CREATE': 'primary',
+            'UPDATE': 'warning',
+            'DELETE': 'danger',
+            'ASSIGN': 'info',
+            'COMPLETE': 'success'
+        }
+        logs.insert_one({
+            'timestamp': datetime.now().isoformat(),
+            'username': username,
+            'action': action,
+            'details': details,
+            'ip_address': ip_address or 'Unknown',
+            'action_color': action_colors.get(action, 'secondary')
+        })
+    except Exception as e:
+        print(f"Error logging action: {e}")
+
+def log_error(error_type, details, username=None, endpoint=None, level='ERROR'):
+    """Log system errors"""
+    try:
+        level_colors = {
+            'ERROR': 'danger',
+            'WARNING': 'warning',
+            'INFO': 'info',
+            'CRITICAL': 'dark'
+        }
+        errors.insert_one({
+            'timestamp': datetime.now().isoformat(),
+            'level': level,
+            'username': username,
+            'endpoint': endpoint,
+            'error_type': error_type,
+            'details': str(details),
+            'level_color': level_colors.get(level, 'secondary')
+        })
+    except Exception as e:
+        print(f"Error logging error: {e}")
+
 def get_tipos_asesoria():
     return [t['nombre'] for t in tipos_asesoria_coll.find()] or ['Asesoría Técnica', 'Inspección', 'Consultoría']
+
+def get_tipos_asesoria_by_tecnico(tecnico_username):
+    """Get advisory types available for a specific technician"""
+    tipos = list(tipos_asesoria_coll.find({
+        '$or': [
+            {'tecnico_asignado': tecnico_username},
+            {'tecnico_asignado': None},
+            {'tecnico_asignado': {'$exists': False}}
+        ]
+    }))
+    return [t['nombre'] for t in tipos]
 roles_list = ['receiver', 'designer', 'tecnico', 'admin', 'sistemas']
 
 def format_date(iso_date):
@@ -94,6 +181,18 @@ def format_date_for_traditional(iso_date):
     except (ValueError, TypeError):
         return ''
 
+def format_date_with_time(iso_date):
+    """Formatea una fecha ISO a dd/mm/aaaa HH:MM."""
+    if not iso_date:
+        return ''
+    try:
+        if isinstance(iso_date, datetime):
+            return iso_date.strftime('%d/%m/%Y %H:%M')
+        dt = datetime.fromisoformat(iso_date.replace('Z', '+00:00'))
+        return dt.strftime('%d/%m/%Y %H:%M')
+    except (ValueError, TypeError):
+        return ''
+
 def reordenar_ids_secuenciales(year):
     prefix = f"{year}-"
     all_in_year = list(oficios.find({'id_secuencial': {'$regex': f"^{re.escape(prefix)}"}}).sort('id_secuencial', 1))
@@ -101,7 +200,6 @@ def reordenar_ids_secuenciales(year):
         new_id = f"{prefix}{i:04d}"
         oficios.update_one({'_id': doc['_id']}, {'$set': {'id_secuencial': new_id}})
 
-# Migrate existing assignments
 for oficio in oficios.find({'assignments': {'$exists': True}}):
     assignments = oficio.get('assignments', [])
     updated_assignments = []
@@ -163,7 +261,18 @@ def index():
         }
         endpoint = role_to_endpoint.get(current_user.role, 'login')
         try:
-            return redirect(url_for(endpoint))
+            if current_user.role == 'admin':
+                return redirect(url_for(endpoint, default_view='oficios'))
+            elif current_user.role == 'receiver':
+                return redirect(url_for(endpoint, default_view='registrar'))
+            elif current_user.role == 'designer':
+                return redirect(url_for(endpoint, default_view='pendientes'))
+            elif current_user.role == 'tecnico':
+                return redirect(url_for(endpoint, default_view='asignados'))
+            elif current_user.role == 'sistemas':
+                return redirect(url_for(endpoint, default_view='add-product'))
+            else:
+                return redirect(url_for(endpoint))
         except BuildError as e:
             flash(f'Error de redirección: {str(e)}', 'error')
             return redirect(url_for('login'))
@@ -188,21 +297,23 @@ def login():
                     user_obj = User(username=user['username'], role=user['role'])
                     login_user(user_obj)
                     session['full_name'] = f"{user.get('nombre', '')} {user.get('apellido', '')}".strip() or username
+                    log_user_action(username, 'LOGIN', f'Usuario {username} inició sesión', request.remote_addr)
                     return redirect(url_for('index'))
                 else:
-                    flash('Contraseña incorrecta.', 'error')
+                    flash('Usuario o contraseña incorrecta.', 'error')
             except Exception as e:
                 flash(f'Error al verificar contraseña: {str(e)}', 'error')
         else:
-            flash('Usuario no encontrado.', 'error')
+            flash('Usuario o contraseña incorrecta.', 'error')
     return render_template('login.html')
 
 @app.route('/logout', methods=['GET', 'POST'])
 @login_required
 def logout():
+    username = current_user.username
+    log_user_action(username, 'LOGOUT', f'Usuario {username} cerró sesión', request.remote_addr)
     logout_user()
     session.clear()
-    flash('Has cerrado sesión exitosamente.', 'success')
     return redirect(url_for('login'))
 
 @app.route('/change_password', methods=['POST'])
@@ -242,8 +353,13 @@ def get_notifications():
         count = len(user_notifications)
         formatted_notifications = [
             {
+                'id': str(n['_id']),
                 'message': escape(n['message']),
-                'timestamp': format_date_for_traditional(n['timestamp'])
+                'details': escape(n.get('details', '')),
+                'type': n.get('type', 'general'),
+                'priority': n.get('priority', 'normal'),
+                'oficio_id': n.get('oficio_id', ''),
+                'timestamp': format_date_with_time(n['timestamp'])
             } for n in user_notifications
         ]
         return jsonify({'notifications': formatted_notifications, 'count': count})
@@ -258,6 +374,35 @@ def clear_notifications():
         notifications.update_many({'user': current_user.username, 'read': False}, {'$set': {'read': True}})
         return jsonify({'success': True})
     except PyMongoError as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/mark_notification_read', methods=['POST'])
+def mark_notification_read():
+    if not current_user.is_authenticated:
+        return jsonify({'success': False})
+    try:
+        data = request.get_json()
+        notification_id = data.get('notification_id')
+        notifications.update_one(
+            {'_id': ObjectId(notification_id), 'user': current_user.username},
+            {'$set': {'read': True}}
+        )
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/delete_notification', methods=['POST'])
+def delete_notification():
+    if not current_user.is_authenticated:
+        return jsonify({'success': False})
+    try:
+        data = request.get_json()
+        notification_id = data.get('notification_id')
+        notifications.delete_one(
+            {'_id': ObjectId(notification_id), 'user': current_user.username}
+        )
+        return jsonify({'success': True})
+    except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/notificaciones/count')
@@ -283,12 +428,22 @@ def get_canton():
     except Exception as e:
         return jsonify({'canton': '', 'error': str(e)})
 
+@app.route('/get_tipos_asesoria_by_tecnico/<tecnico_username>', methods=['GET'])
+@login_required
+def get_tipos_asesoria_by_tecnico_api(tecnico_username):
+    try:
+        tipos = get_tipos_asesoria_by_tecnico(tecnico_username)
+        return jsonify({'tipos_asesoria': tipos})
+    except Exception as e:
+        return jsonify({'tipos_asesoria': [], 'error': str(e)})
+
 @app.route('/receive', methods=['GET', 'POST'])
 @login_required
 def receive():
     if current_user.role not in ['receiver', 'admin']:
         flash('Acceso no autorizado.', 'error')
         return redirect(url_for('login'))
+    current_view = request.args.get('default_view', 'registrar')
 
     try:
         parroquias_data = list(parroquias.find())
@@ -340,7 +495,6 @@ def receive():
         if request.method == 'POST':
             if 'register_oficio' in request.form:
                 try:
-                    # Parsear el formato YYYY-MM-DD del input type="date"
                     fecha_enviado = datetime.strptime(request.form['fecha_enviado'], '%Y-%m-%d').isoformat()
                 except ValueError:
                     flash('Formato de fecha inválido.', 'error')
@@ -364,8 +518,6 @@ def receive():
                 max_id_doc = oficios.find_one({'id_secuencial': {'$regex': f'^{year}-'}}, sort=[('id_secuencial', -1)])
                 count = int(max_id_doc['id_secuencial'].split('-')[1]) + 1 if max_id_doc else 1
                 id_secuencial = f"{year}-{count:04d}"
-
-                # Calcular fecha_recibido en formato ISO para almacenamiento, pero formatear para visualización
                 fecha_recibido_iso = datetime.now().isoformat()
                 fecha_recibido_traditional = datetime.now().strftime('%d/%m/%y')
 
@@ -373,7 +525,7 @@ def receive():
                     'id_secuencial': id_secuencial,
                     'fecha_enviado': fecha_enviado,
                     'fecha_recibido': fecha_recibido_iso,
-                    'fecha_recibido_traditional': fecha_recibido_traditional,  # Almacenar formato tradicional para visualización
+                    'fecha_recibido_traditional': fecha_recibido_traditional,
                     'numero_oficio': numero_oficio,
                     'gad_parroquial': gad_parroquial,
                     'canton': canton,
@@ -405,19 +557,22 @@ def receive():
                     for designer in designers:
                         notifications.insert_one({
                             'user': designer['username'],
-                            'message': f'Tienes una nueva designación pendiente: Oficio {id_secuencial}',
+                            'message': f'📋 Nuevo oficio de {gad_parroquial} ({canton}) requiere designación',
+                            'details': f'Oficio: {numero_oficio} | ID: {id_secuencial}',
+                            'type': 'new_oficio',
+                            'oficio_id': id_secuencial,
+                            'priority': 'normal',
                             'timestamp': datetime.now().isoformat(),
                             'read': False
                         })
                     flash('Oficio registrado exitosamente.', 'success')
                 except PyMongoError as e:
                     flash(f'Error de base de datos al registrar oficio: {str(e)}', 'error')
-                return redirect(url_for('receive'))
+                return redirect(url_for('receive', current_view='registrar'))
 
             elif 'edit_oficio' in request.form:
                 oficio_id = request.form.get('oficio_id')
                 try:
-                    # Parsear el formato YYYY-MM-DD del input type="date"
                     fecha_enviado = datetime.strptime(request.form['fecha_enviado'], '%Y-%m-%d').isoformat()
                 except ValueError:
                     flash('Formato de fecha inválido.', 'error')
@@ -468,7 +623,7 @@ def receive():
                         flash('Oficio actualizado exitosamente.', 'success')
                 except PyMongoError as e:
                     flash(f'Error de base de datos al actualizar oficio: {str(e)}', 'error')
-                return redirect(url_for('receive'))
+                return redirect(url_for('receive', current_view='historial'))
 
             elif 'delete_oficio' in request.form:
                 oficio_id = request.form.get('delete_oficio')
@@ -495,14 +650,16 @@ def receive():
                     flash('Oficio eliminado y IDs reordenados exitosamente.', 'success')
                 except PyMongoError as e:
                     flash(f'Error de base de datos al eliminar oficio: {str(e)}', 'error')
-                return redirect(url_for('receive'))
+                return redirect(url_for('receive', current_view='historial'))
 
         return render_template('receive.html',
                                parroquias=parroquias_data,
                                historial=historial,
                                oficios=oficios_list,
                                users=users_list,
-                               tipos_asesoria=get_tipos_asesoria())
+                               tipos_asesoria=get_tipos_asesoria(),
+                               tipos_asesoria_full=list(tipos_asesoria_coll.find()),
+                               current_view=current_view)
 
     except PyMongoError as e:
         flash(f'Error de base de datos: {str(e)}', 'error')
@@ -512,7 +669,8 @@ def receive():
                                historial=historial if 'historial' in locals() else [],
                                oficios=oficios_list if 'oficios_list' in locals() else [],
                                users=users_list if 'users_list' in locals() else [],
-                               tipos_asesoria=get_tipos_asesoria())
+                               tipos_asesoria=get_tipos_asesoria(),
+                               current_view=current_view)
     except Exception as e:
         flash(f'Error inesperado: {str(e)}', 'error')
         print(f"Unexpected error in receive: {str(e)}")
@@ -521,7 +679,8 @@ def receive():
                                historial=historial if 'historial' in locals() else [],
                                oficios=oficios_list if 'oficios_list' in locals() else [],
                                users=users_list if 'users_list' in locals() else [],
-                               tipos_asesoria=get_tipos_asesoria())
+                               tipos_asesoria=get_tipos_asesoria(),
+                               current_view=current_view)
 
 @app.route('/seguimiento', methods=['GET'])
 @login_required
@@ -570,19 +729,33 @@ def seguimiento():
 def design():
     if current_user.role not in ['designer', 'admin']:
         return redirect(url_for('login'))
+    current_view = request.args.get('default_view', 'pendientes')
     try:
         pendientes = list(oficios.find({'estado': 'pendiente'}).sort('id_secuencial', 1))
-        designados = list(oficios.find({'estado': 'designado'}).sort('id_secuencial', 1))
+        designados = list(oficios.find({'estado': {'$in': ['designado', 'completado']}}).sort('id_secuencial', 1))
         completados = list(oficios.find({'estado': 'completado'}).sort('id_secuencial', 1))
+        
+        print(f"DEBUG: Pendientes count: {len(pendientes)}")
+        print(f"DEBUG: Designados count: {len(designados)}")
+        print(f"DEBUG: Completados count: {len(completados)}")
+        
+        all_estados = list(oficios.aggregate([{"$group": {"_id": "$estado", "count": {"$sum": 1}}}]))
+        print(f"DEBUG: All estados in DB: {all_estados}")
+        
+        if designados:
+            print(f"DEBUG: First designado: {designados[0].get('id_secuencial', 'No ID')}")
+            print(f"DEBUG: First designado estado: {designados[0].get('estado', 'No estado')}")
+            print(f"DEBUG: First designado assignments: {len(designados[0].get('assignments', []))}")
 
         for oficio in pendientes + designados + completados:
             oficio['fecha_enviado_traditional'] = format_date_for_traditional(oficio.get('fecha_enviado', ''))
             oficio['fecha_recibido_traditional'] = format_date_for_traditional(oficio.get('fecha_recibido', ''))
             oficio['fecha_designacion_formatted'] = format_date_for_traditional(oficio.get('fecha_designacion', ''))
+            oficio['fecha_designacion_with_time'] = format_date_with_time(oficio.get('fecha_designacion', ''))
             if oficio.get('fecha_enviado'):
                 try:
                     dt = datetime.fromisoformat(oficio['fecha_enviado'].replace('Z', '+00:00'))
-                    oficio['fecha_enviado'] = dt.strftime('%Y-%m-%d')  # ISO for <input type="date">
+                    oficio['fecha_enviado'] = dt.strftime('%Y-%m-%d')
                 except ValueError:
                     oficio['fecha_enviado'] = ''
             assignments = oficio.get('assignments', [])
@@ -609,15 +782,11 @@ def design():
                 tecnicos = request.form.getlist('tecnico_asignado[]')
                 tipos_asesoria = request.form.getlist('tipo_asesoria[]')
                 
-                # Filtrar valores vacíos y validar
+                if not oficio_id:
+                    flash('ID de oficio requerido.', 'danger')
+                    return redirect(url_for('design'))
                 tecnicos = [t.strip() for t in tecnicos if t and t.strip()]
                 tipos_asesoria = [ta.strip() for ta in tipos_asesoria if ta and ta.strip()]
-                
-                if not oficio_id or not tecnicos or not tipos_asesoria or len(tecnicos) != len(tipos_asesoria):
-                    flash('Debe seleccionar técnicos y tipos de asesoría válidos.', 'danger')
-                    return redirect(url_for('design'))
-                    
-                # Validar que el oficio_id sea un ObjectId válido
                 try:
                     ObjectId(oficio_id)
                 except:
@@ -642,25 +811,30 @@ def design():
                 try:
                     oficios.update_one({'_id': ObjectId(oficio_id)}, {'$set': update_data})
                     notifications.delete_many({'oficio_id': ObjectId(oficio_id)})
+                    oficio_data = oficios.find_one({'_id': ObjectId(oficio_id)})
+                    oficio_id_secuencial = oficio_data.get('id_secuencial', 'Desconocido') if oficio_data else 'Desconocido'
                     for assignment in assignments:
+                        user_data = users.find_one({'username': assignment['tecnico']})
+                        user_name = f"{user_data.get('nombre', '')} {user_data.get('apellido', '')}".strip() if user_data else assignment['tecnico']
                         notifications.insert_one({
                             'user': assignment['tecnico'],
-                            'message': f'Oficio asignado: {escape(request.form.get("numero_oficio", "Desconocido"))}',
+                            'message': f'🔧 Asignación de {assignment["tipo_asesoria"]} para {oficio_data.get("gad_parroquial", "")}',
+                            'details': f'Oficio: {oficio_data.get("numero_oficio", "")} | ID: {oficio_id_secuencial}',
+                            'type': 'assignment',
+                            'oficio_id': oficio_id_secuencial,
+                            'priority': 'high',
                             'timestamp': datetime.now().isoformat(),
-                            'oficio_id': ObjectId(oficio_id),
                             'read': False
                         })
                     flash('Técnico asignado exitosamente.', 'success')
                 except PyMongoError as e:
                     flash(f'Error de base de datos al asignar técnico: {str(e)}', 'danger')
-                return redirect(url_for('design'))
+                return redirect(url_for('design', current_view='pendientes'))
 
             elif 'edit_oficio' in request.form:
                 oficio_id = request.form.get('oficio_id')
                 tecnicos = request.form.getlist('tecnico_asignado[]')
                 tipos = request.form.getlist('tipo_asesoria[]')
-                
-                # Filtrar valores vacíos y validar
                 tecnicos = [t.strip() for t in tecnicos if t and t.strip()]
                 tipos = [ta.strip() for ta in tipos if ta and ta.strip()]
                 
@@ -680,7 +854,6 @@ def design():
                     flash('Debe completar todos los campos requeridos.', 'danger')
                     return redirect(url_for('design'))
                     
-                # Validar que el oficio_id sea un ObjectId válido
                 try:
                     ObjectId(oficio_id)
                 except:
@@ -709,10 +882,12 @@ def design():
                 try:
                     oficios.update_one({'_id': ObjectId(oficio_id)}, {'$set': update_data})
                     notifications.delete_many({'oficio_id': ObjectId(oficio_id)})
+                    oficio_data = oficios.find_one({'_id': ObjectId(oficio_id)})
+                    oficio_id_secuencial = oficio_data.get('id_secuencial', 'Desconocido') if oficio_data else 'Desconocido'
                     for assignment in assignments:
                         notifications.insert_one({
                             'user': assignment['tecnico'],
-                            'message': f'Oficio actualizado: {escape(request.form.get("numero_oficio", "Desconocido"))}',
+                            'message': f'Oficio actualizado: {oficio_id_secuencial}',
                             'timestamp': datetime.now().isoformat(),
                             'oficio_id': ObjectId(oficio_id),
                             'read': False
@@ -720,7 +895,7 @@ def design():
                     flash('Oficio actualizado exitosamente.', 'success')
                 except PyMongoError as e:
                     flash(f'Error de base de datos al actualizar oficio: {str(e)}', 'danger')
-                return redirect(url_for('design'))
+                return redirect(url_for('design', current_view='designados'))
 
             elif 'delete_oficio' in request.form:
                 oficio_id = request.form.get('oficio_id')
@@ -747,14 +922,14 @@ def design():
                     flash('Oficio eliminado y IDs reordenados exitosamente.', 'success')
                 except PyMongoError as e:
                     flash(f'Error de base de datos al eliminar oficio: {str(e)}', 'danger')
-                return redirect(url_for('design'))
+                return redirect(url_for('design', current_view='designados'))
 
-        # Create sorted oficios list for seguimiento
         all_oficios = list(oficios.find().sort('id_secuencial', 1))
         for oficio in all_oficios:
             oficio['fecha_enviado_traditional'] = format_date_for_traditional(oficio.get('fecha_enviado', ''))
             oficio['fecha_recibido_traditional'] = format_date_for_traditional(oficio.get('fecha_recibido', ''))
             oficio['fecha_designacion_formatted'] = format_date_for_traditional(oficio.get('fecha_designacion', ''))
+            oficio['fecha_designacion_with_time'] = format_date_with_time(oficio.get('fecha_designacion', ''))
             assignments = oficio.get('assignments', [])
             for assignment in assignments:
                 if 'anexo_datos' in assignment:
@@ -773,10 +948,11 @@ def design():
                                designados=designados,
                                completados=completados,
                                oficios=all_oficios,
-                               tecnicos=users_list,
+                               users=users_list,
                                tipos_asesoria=get_tipos_asesoria(),
+                               tipos_asesoria_full=list(tipos_asesoria_coll.find()),
                                parroquias=list(parroquias.find()),
-                               users=users_list)
+                               current_view=current_view)
 
     except PyMongoError as e:
         flash(f'Error de base de datos: {str(e)}', 'danger')
@@ -786,10 +962,10 @@ def design():
                                designados=[],
                                completados=[],
                                oficios=[],
-                               tecnicos=users_list if 'users_list' in locals() else [],
+                               users=[],
                                tipos_asesoria=get_tipos_asesoria(),
                                parroquias=[],
-                               users=[])
+                               current_view=current_view)
     except Exception as e:
         flash(f'Error inesperado: {str(e)}', 'danger')
         print(f"Unexpected error in design: {str(e)}")
@@ -798,16 +974,17 @@ def design():
                                designados=[],
                                completados=[],
                                oficios=[],
-                               tecnicos=users_list if 'users_list' in locals() else [],
+                               users=[],
                                tipos_asesoria=get_tipos_asesoria(),
                                parroquias=[],
-                               users=[])
+                               current_view=current_view)
 
 @app.route('/tecnico', methods=['GET', 'POST'])
 @login_required
 def tecnico():
     if current_user.role not in ['tecnico', 'admin']:
         return redirect(url_for('login'))
+    current_view = request.args.get('default_view', 'asignados')
     try:
         anexos_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'anexos')
         os.makedirs(anexos_folder, exist_ok=True)
@@ -831,47 +1008,64 @@ def tecnico():
                     'acta_entrega': acta_entrega
                 }
 
-                if 'anexo' in request.files and request.files['anexo'].filename != '':
-                    anexo = request.files['anexo']
+                anexo = request.files.get('anexo')
+                if anexo and anexo.filename:
                     anexo_nombre = secure_filename(anexo.filename)
                     anexo_id = fs.put(anexo, filename=anexo_nombre)
                     update_data['anexo_nombre'] = anexo_nombre
                     update_data['anexo_id'] = anexo_id
-
-                oficio = oficios.find_one({
-                    '_id': ObjectId(oficio_id),
-                    'assignments.tecnico': current_user.username
-                })
-                if not oficio:
-                    flash('Oficio no encontrado o no asignado al técnico.', 'danger')
-                    return redirect(url_for('tecnico'))
-
-                for assignment in oficio.get('assignments', []):
-                    if assignment['tecnico'] == current_user.username:
-                        assignment.update(update_data)
-                        break
-
-                try:
-                    if 'entregar' in request.form:
-                        oficios.update_one(
-                            {'_id': ObjectId(oficio_id)},
-                            {'$set': {'assignments': oficio['assignments'], 'estado': 'completado'}}
-                        )
-                        flash(f'Asignación {numero_oficio} entregada con éxito.', 'success')
+                update_set = {
+                    'assignments.$.sub_estado': update_data['sub_estado'],
+                    'assignments.$.desarrollo_actividad': update_data['desarrollo_actividad'],
+                    'assignments.$.fecha_asesoria': update_data['fecha_asesoria'],
+                    'assignments.$.entrega_recepcion': update_data['entrega_recepcion'],
+                    'assignments.$.oficio_delegacion': update_data['oficio_delegacion'],
+                    'assignments.$.acta_entrega': update_data['acta_entrega']
+                }
+                
+                if 'anexo_nombre' in update_data:
+                    update_set['assignments.$.anexo_nombre'] = update_data['anexo_nombre']
+                    update_set['assignments.$.anexo_id'] = update_data['anexo_id']
+                
+                if 'entregar' in request.form and request.form.get('entregar') == '1':
+                    if sub_estado == 'Concluido':
+                        oficio_data = oficios.find_one({'_id': ObjectId(oficio_id)})
+                        if oficio_data:
+                            all_concluded = True
+                            for assignment in oficio_data.get('assignments', []):
+                                if assignment['tecnico'] == current_user.username:
+                                    continue
+                                if assignment.get('sub_estado') != 'Concluido':
+                                    all_concluded = False
+                                    break
+                            if all_concluded:
+                                update_set['estado'] = 'completado'
                     else:
-                        oficios.update_one(
-                            {'_id': ObjectId(oficio_id)},
-                            {'$set': {'assignments': oficio['assignments']}}
-                        )
-                        flash(f'Asignación {numero_oficio} actualizada con éxito.', 'success')
-                except PyMongoError as e:
-                    flash(f'Error de base de datos al actualizar asignación: {str(e)}', 'danger')
+                        flash('Debe marcar como Concluido antes de entregar', 'error')
+                        return redirect(url_for('tecnico', current_view='asignados'))
+                
+                try:
+                    result = oficios.update_one(
+                        {'_id': ObjectId(oficio_id), 'assignments.tecnico': current_user.username},
+                        {'$set': update_set}
+                    )
+                    
+                    if result.matched_count > 0:
+                        if 'entregar' in request.form and request.form.get('entregar') == '1':
+                            flash('Entregado correctamente', 'success')
+                        else:
+                            flash('Actualizado correctamente', 'success')
+                    else:
+                        flash('No se encontro el oficio', 'error')
+                except Exception as e:
+                    flash('Error al actualizar', 'error')
 
-                return redirect(url_for('tecnico'))
+                return redirect(url_for('tecnico', current_view='asignados'))
 
         asignados = []
         completados = []
-        for oficio in oficios.find({'estado': 'designado'}).sort('fecha_designacion', -1):
+        
+        for oficio in oficios.find({'estado': {'$in': ['designado', 'completado']}}).sort('fecha_designacion', -1):
             for assignment in oficio.get('assignments', []):
                 if assignment['tecnico'] == current_user.username:
                     assignment_data = {
@@ -905,15 +1099,16 @@ def tecnico():
                                asignados=asignados,
                                completados=completados,
                                users=list(users.find()) if current_user.role == 'admin' else [],
-                               parroquias=list(parroquias.find()))
+                               parroquias=list(parroquias.find()),
+                               current_view=current_view)
     except PyMongoError as e:
         flash(f'Error de base de datos: {str(e)}', 'error')
         print(f"Database error in tecnico: {str(e)}")
-        return redirect(url_for('tecnico'))
+        return redirect(url_for('tecnico', current_view=current_view))
     except Exception as e:
         flash(f'Error inesperado: {str(e)}', 'error')
         print(f"Unexpected error in tecnico: {str(e)}")
-        return redirect(url_for('tecnico'))
+        return redirect(url_for('tecnico', current_view=current_view))
 
 @app.route('/download_anexo/<oficio_id>/<tecnico>')
 @login_required
@@ -981,7 +1176,8 @@ def admin():
     if current_user.role != 'admin':
         return redirect(url_for('login'))
     try:
-        current_section = request.args.get('current_section', request.form.get('current_section', 'oficios'))
+        current_view = request.args.get('default_view', request.args.get('current_section', request.form.get('current_section', 'oficios')))
+        current_section = current_view
         if request.method == 'POST':
             if 'create_user' in request.form:
                 try:
@@ -1000,7 +1196,7 @@ def admin():
                     flash(f'Error de base de datos al crear usuario: {str(e)}', 'error')
                 except Exception as e:
                     flash(f'Error al crear usuario: {str(e)}', 'error')
-                return redirect(url_for('admin', current_section=current_section))
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
 
             elif 'edit_user' in request.form:
                 user_id = request.form['user_id']
@@ -1020,7 +1216,7 @@ def admin():
                     flash(f'Error de base de datos al actualizar usuario: {str(e)}', 'error')
                 except Exception as e:
                     flash(f'Error al actualizar usuario: {str(e)}', 'error')
-                return redirect(url_for('admin', current_section=current_section))
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
 
             elif 'delete_user' in request.form:
                 user_id = request.form['user_id']
@@ -1031,28 +1227,40 @@ def admin():
                     flash(f'Error de base de datos al eliminar usuario: {str(e)}', 'error')
                 except Exception as e:
                     flash(f'Error al eliminar usuario: {str(e)}', 'error')
-                return redirect(url_for('admin', current_section=current_section))
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
 
             elif 'add_tipo_asesoria' in request.form:
                 try:
-                    tipos_asesoria_coll.insert_one({'nombre': escape(request.form['nombre'])})
+                    nombre = escape(request.form['nombre'])
+                    tecnico_asignado = escape(request.form.get('tecnico_asignado', ''))
+                    tipos_asesoria_coll.insert_one({
+                        'nombre': nombre,
+                        'tecnico_asignado': tecnico_asignado if tecnico_asignado else None
+                    })
                     flash('Tipo de asesoría añadido exitosamente', 'success')
                 except PyMongoError as e:
                     flash(f'Error de base de datos al añadir tipo de asesoría: {str(e)}', 'error')
                 except Exception as e:
                     flash(f'Error al añadir tipo de asesoría: {str(e)}', 'error')
-                return redirect(url_for('admin', current_section=current_section))
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
 
             elif 'edit_tipo_asesoria' in request.form:
                 tipo_id = request.form['tipo_id']
                 try:
-                    tipos_asesoria_coll.update_one({'_id': ObjectId(tipo_id)}, {'$set': {'nombre': escape(request.form['edit_nombre'])}})
+                    nombre = escape(request.form['edit_nombre'])
+                    tecnico_asignado = escape(request.form.get('edit_tecnico_asignado', ''))
+                    tipos_asesoria_coll.update_one({'_id': ObjectId(tipo_id)}, {
+                        '$set': {
+                            'nombre': nombre,
+                            'tecnico_asignado': tecnico_asignado if tecnico_asignado else None
+                        }
+                    })
                     flash('Tipo de asesoría actualizado exitosamente', 'success')
                 except PyMongoError as e:
                     flash(f'Error de base de datos al actualizar tipo de asesoría: {str(e)}', 'error')
                 except Exception as e:
                     flash(f'Error al actualizar tipo de asesoría: {str(e)}', 'error')
-                return redirect(url_for('admin', current_section=current_section))
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
 
             elif 'delete_tipo_asesoria' in request.form:
                 tipo_id = request.form['tipo_id']
@@ -1063,7 +1271,7 @@ def admin():
                     flash(f'Error de base de datos al eliminar tipo de asesoría: {str(e)}', 'error')
                 except Exception as e:
                     flash(f'Error al eliminar tipo de asesoría: {str(e)}', 'error')
-                return redirect(url_for('admin', current_section=current_section))
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
 
             elif 'add_parroquia' in request.form:
                 try:
@@ -1076,7 +1284,7 @@ def admin():
                     flash(f'Error de base de datos al añadir parroquia: {str(e)}', 'error')
                 except Exception as e:
                     flash(f'Error al añadir parroquia: {str(e)}', 'error')
-                return redirect(url_for('admin', current_section=current_section))
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
 
             elif 'delete_parroquia' in request.form:
                 parroquia_id = request.form['parroquia_id']
@@ -1090,7 +1298,7 @@ def admin():
                     flash(f'Error de base de datos al eliminar parroquia: {str(e)}', 'error')
                 except Exception as e:
                     flash(f'Error al eliminar parroquia: {str(e)}', 'error')
-                return redirect(url_for('admin', current_section=current_section))
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
 
             elif 'edit_parroquia' in request.form:
                 parroquia_id = request.form['parroquia_id']
@@ -1106,7 +1314,7 @@ def admin():
                     flash(f'Error de base de datos al actualizar parroquia: {str(e)}', 'error')
                 except Exception as e:
                     flash(f'Error al actualizar parroquia: {str(e)}', 'error')
-                return redirect(url_for('admin', current_section=current_section))
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
 
             elif 'edit_oficio' in request.form:
                 oficio_id = request.form['oficio_id']
@@ -1144,7 +1352,7 @@ def admin():
                     flash(f'Error de base de datos al actualizar oficio: {str(e)}', 'error')
                 except Exception as e:
                     flash(f'Error al actualizar oficio: {str(e)}', 'error')
-                return redirect(url_for('admin', current_section=current_section))
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
 
             elif 'delete_oficio' in request.form:
                 oficio_id = request.form['oficio_id']
@@ -1173,7 +1381,82 @@ def admin():
                     flash(f'Error de base de datos al eliminar oficio: {str(e)}', 'error')
                 except Exception as e:
                     flash(f'Error al eliminar oficio: {str(e)}', 'error')
-                return redirect(url_for('admin', current_section=current_section))
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
+
+            elif 'clear_oficios' in request.form:
+                try:
+                    for oficio in oficios.find():
+                        if oficio.get('archivo_id'):
+                            try:
+                                fs.delete(oficio['archivo_id'])
+                            except:
+                                pass
+                        for assignment in oficio.get('assignments', []):
+                            if assignment.get('anexo_id'):
+                                try:
+                                    fs.delete(assignment['anexo_id'])
+                                except:
+                                    pass
+                    result = oficios.delete_many({})
+                    flash(f'Se eliminaron {result.deleted_count} oficios exitosamente', 'success')
+                except Exception as e:
+                    flash(f'Error al limpiar oficios: {str(e)}', 'error')
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
+
+            elif 'clear_notifications' in request.form:
+                try:
+                    result = notifications.delete_many({})
+                    flash(f'Se eliminaron {result.deleted_count} notificaciones exitosamente', 'success')
+                except Exception as e:
+                    flash(f'Error al limpiar notificaciones: {str(e)}', 'error')
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
+
+            elif 'clear_orphan_files' in request.form:
+                try:
+                    referenced_files = set()
+                    for oficio in oficios.find():
+                        if oficio.get('archivo_id'):
+                            referenced_files.add(oficio['archivo_id'])
+                        for assignment in oficio.get('assignments', []):
+                            if assignment.get('anexo_id'):
+                                referenced_files.add(assignment['anexo_id'])
+                    deleted_count = 0
+                    for file_doc in fs.find():
+                        if file_doc._id not in referenced_files:
+                            try:
+                                fs.delete(file_doc._id)
+                                deleted_count += 1
+                            except:
+                                pass
+                    flash(f'Se eliminaron {deleted_count} archivos huérfanos exitosamente', 'success')
+                except Exception as e:
+                    flash(f'Error al limpiar archivos huérfanos: {str(e)}', 'error')
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
+
+            elif 'reset_sequential_ids' in request.form:
+                try:
+                    current_year = datetime.now().year
+                    reordenar_ids_secuenciales(current_year)
+                    flash(f'IDs secuenciales reiniciados para el año {current_year}', 'success')
+                except Exception as e:
+                    flash(f'Error al reiniciar IDs secuenciales: {str(e)}', 'error')
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
+
+            elif 'clear_logs' in request.form:
+                try:
+                    result = logs.delete_many({})
+                    flash(f'Se eliminaron {result.deleted_count} logs exitosamente', 'success')
+                except Exception as e:
+                    flash(f'Error al limpiar logs: {str(e)}', 'error')
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
+
+            elif 'clear_errors' in request.form:
+                try:
+                    result = errors.delete_many({})
+                    flash(f'Se eliminaron {result.deleted_count} errores exitosamente', 'success')
+                except Exception as e:
+                    flash(f'Error al limpiar errores: {str(e)}', 'error')
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
 
         stats = {
             'pendientes': oficios.count_documents({'estado': 'pendiente'}),
@@ -1203,6 +1486,14 @@ def admin():
         for user in users_list:
             user['full_name'] = f"{user.get('nombre', '')} {user.get('apellido', '')}".strip() or user['username']
 
+        logs_data = list(logs.find().sort('timestamp', -1).limit(100))
+        for log in logs_data:
+            log['timestamp_formatted'] = format_date_with_time(log['timestamp'])
+        
+        errors_data = list(errors.find().sort('timestamp', -1).limit(50))
+        for error in errors_data:
+            error['timestamp_formatted'] = format_date_with_time(error['timestamp'])
+
         return render_template('admin.html',
                                stats=stats,
                                oficios=all_oficios,
@@ -1211,15 +1502,17 @@ def admin():
                                tipos_asesoria=list(tipos_asesoria_coll.find()),
                                parroquias=list(parroquias.find()),
                                tecnicos=users_list,
+                               logs=logs_data,
+                               errors=errors_data,
                                current_section=current_section)
     except PyMongoError as e:
         flash(f'Error de base de datos: {str(e)}', 'error')
         print(f"Database error in admin: {str(e)}")
-        return redirect(url_for('admin', current_section=current_section))
+        return redirect(url_for('admin', current_section=current_section, current_view=current_section))
     except Exception as e:
         flash(f'Error inesperado: {str(e)}', 'error')
         print(f"Unexpected error in admin: {str(e)}")
-        return redirect(url_for('admin', current_section=current_section))
+        return redirect(url_for('admin', current_section=current_section, current_view=current_section))
 
 @app.route('/preview/<oficio_id>')
 @login_required
@@ -1281,6 +1574,7 @@ def download(oficio_id):
 def sistemas():
     if current_user.role not in ['admin', 'sistemas']:
         return redirect(url_for('login'))
+    current_view = request.args.get('default_view', 'add-product')
     try:
         if request.method == 'POST':
             if 'add_product' in request.form:
@@ -1335,7 +1629,7 @@ def sistemas():
                     flash('Producto agregado exitosamente', 'success')
                 except PyMongoError as e:
                     flash(f'Error de base de datos al agregar producto: {str(e)}', 'error')
-                return redirect(url_for('sistemas'))
+                return redirect(url_for('sistemas', current_view='add-product'))
 
             elif 'edit_product' in request.form:
                 product_id = request.form.get('product_id', '')
@@ -1383,7 +1677,7 @@ def sistemas():
                     flash(f'Error de base de datos al actualizar producto: {str(e)}', 'error')
                 except Exception as e:
                     flash(f'Error al actualizar producto: {str(e)}', 'error')
-                return redirect(url_for('sistemas'))
+                return redirect(url_for('sistemas', current_view='inventory'))
 
             elif 'delete_product' in request.form:
                 product_id = request.form.get('product_id', '')
@@ -1397,7 +1691,7 @@ def sistemas():
                     flash(f'Error de base de datos al eliminar producto: {str(e)}', 'error')
                 except Exception as e:
                     flash(f'Error al eliminar producto: {str(e)}', 'error')
-                return redirect(url_for('sistemas'))
+                return redirect(url_for('sistemas', current_view='inventory'))
 
         inventarios = list(db_oficios.inventarios.find())
         for product in inventarios:
@@ -1408,15 +1702,16 @@ def sistemas():
 
         return render_template('sistemas.html',
                                inventarios=inventarios,
-                               tecnicos=tecnicos)
+                               tecnicos=tecnicos,
+                               current_view=current_view)
     except PyMongoError as e:
         flash(f'Error de base de datos: {str(e)}', 'error')
         print(f"Database error in sistemas: {str(e)}")
-        return redirect(url_for('sistemas'))
+        return redirect(url_for('sistemas', current_view=current_view))
     except Exception as e:
         flash(f'Error inesperado: {str(e)}', 'error')
         print(f"Unexpected error in sistemas: {str(e)}")
-        return redirect(url_for('sistemas'))
+        return redirect(url_for('sistemas', current_view=current_view))
 
 @app.route('/generate_report/<format>')
 @login_required

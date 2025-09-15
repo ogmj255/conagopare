@@ -497,9 +497,68 @@ body {
 }
 
 #designadosTable .assignment-entry {
-    margin-bottom: 0.5rem; /* Espacio vertical entre entradas */
+    margin-bottom: 0.5rem;
 }
 
 #designadosTable .assignment-entry:last-child {
-    margin-bottom: 0; /* Elimina el margen inferior de la última entrada */
+    margin-bottom: 0;
+}
+.notification-item {
+    padding: 12px 16px !important;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.notification-item:hover {
+    background-color: #f8f9fa !important;
+}
+
+.notification-content {
+    line-height: 1.4;
+}
+
+.notification-message {
+    font-weight: 500;
+    color: #212529;
+    margin-bottom: 4px;
+}
+
+.notification-details {
+    font-size: 0.85em;
+    margin-bottom: 4px;
+}
+
+.notification-time {
+    font-size: 0.8em;
+}
+
+.notification-dropdown {
+    min-width: 400px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.notification-actions {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.notification-item:hover .notification-actions {
+    opacity: 1;
+}
+
+.notification-actions .btn {
+    padding: 2px 6px;
+    font-size: 0.75rem;
+}
+
+.notification-badge {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
 }

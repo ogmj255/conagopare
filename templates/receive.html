@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,7 +9,8 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body>
+
+<body data-current-view="{{ current_view }}" data-current-role="receive">
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">Sistema de Gestión de Oficios</a>
@@ -19,13 +21,16 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link active" id="tab-registrar" onclick="showPanel('registrar')" href="#">Registrar Oficio</a>
+                        <a class="nav-link active" id="tab-registrar" onclick="showPanel('registrar')"
+                            href="#">Registrar Oficio</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" id="tab-historial" onclick="showPanel('historial')" href="#">Historial de Registros</a>
+                        <a class="nav-link" id="tab-historial" onclick="showPanel('historial')" href="#">Historial de
+                            Registros</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" id="tab-seguimiento" onclick="showPanel('seguimiento')" href="#">Seguimiento</a>
+                        <a class="nav-link" id="tab-seguimiento" onclick="showPanel('seguimiento')"
+                            href="#">Seguimiento</a>
                     </li>
                 </ul>
                 <ul class="navbar-nav">
@@ -66,21 +71,26 @@
                         <i class="bi bi-file-earmark-plus me-2"></i>Registrar Nuevo Oficio
                     </div>
                     <div class="card-body">
-                        <form id="registerForm" method="POST" action="{{ url_for('receive') }}" enctype="multipart/form-data" novalidate>
+                        <form id="registerForm" method="POST" action="{{ url_for('receive') }}"
+                            enctype="multipart/form-data" novalidate>
                             <input type="hidden" name="register_oficio" value="true">
+                            <input type="hidden" name="current_view" value="registrar">
                             <div class="mb-3">
                                 <label for="fecha_enviado" class="form-label">Fecha del Oficio</label>
-                                <input type="date" class="form-control" id="fecha_enviado" name="fecha_enviado" required>
+                                <input type="date" class="form-control" id="fecha_enviado" name="fecha_enviado"
+                                    required>
                                 <div class="invalid-feedback">Por favor, seleccione una fecha.</div>
                             </div>
                             <div class="mb-3">
                                 <label for="numero_oficio" class="form-label">Número de Oficio</label>
-                                <input type="text" class="form-control" id="numero_oficio" name="numero_oficio" required>
+                                <input type="text" class="form-control" id="numero_oficio" name="numero_oficio"
+                                    required>
                                 <div class="invalid-feedback">Por favor, ingrese el número de oficio.</div>
                             </div>
                             <div class="mb-3">
                                 <label for="gad_parroquial" class="form-label">GAD Parroquial</label>
-                                <select class="form-select" id="gad_parroquial" name="gad_parroquial" onchange="updateCanton()" required>
+                                <select class="form-select" id="gad_parroquial" name="gad_parroquial"
+                                    onchange="updateCanton()" required>
                                     <option value="">Seleccione...</option>
                                     {% for parroquia in parroquias %}
                                     <option value="{{ parroquia.parroquia }}">{{ parroquia.parroquia }}</option>
@@ -91,7 +101,8 @@
                             <div class="mb-3">
                                 <label for="canton" class="form-label">Cantón</label>
                                 <input type="text" class="form-control" id="canton" name="canton" readonly required>
-                                <div class="invalid-feedback">Por favor, seleccione un GAD parroquial para cargar el cantón.</div>
+                                <div class="invalid-feedback">Por favor, seleccione un GAD parroquial para cargar el
+                                    cantón.</div>
                             </div>
                             <div class="mb-3">
                                 <label for="detalle" class="form-label">Detalle</label>
@@ -103,7 +114,8 @@
                                 <input type="file" class="form-control" id="archivo" name="archivo" accept=".pdf">
                                 <div class="invalid-feedback">Por favor, seleccione un archivo PDF.</div>
                             </div>
-                            <button type="button" class="btn btn-success" onclick="showConfirmModal()">Registrar</button>
+                            <button type="button" class="btn btn-success"
+                                onclick="showConfirmModal()">Registrar</button>
                         </form>
                     </div>
                 </div>
@@ -140,7 +152,9 @@
                             <table class="table table-hover table-sm align-middle" id="historial-registros">
                                 <thead>
                                     <tr>
-                                        <th>ID</th>
+                                        <th style="cursor: pointer;" onclick="sortHistorialById()"
+                                            title="Click para ordenar">ID <i id="sort-icon-historial"
+                                                class="bi bi-arrow-down-up"></i></th>
                                         <th>Número Oficio</th>
                                         <th>Parroquia</th>
                                         <th>Cantón</th>
@@ -152,8 +166,7 @@
                                 </thead>
                                 <tbody>
                                     {% for oficio in historial %}
-                                    <tr data-id="{{ oficio.id_secuencial }}"
-                                        data-mongoid="{{ oficio._id }}"
+                                    <tr data-id="{{ oficio.id_secuencial }}" data-mongoid="{{ oficio._id }}"
                                         data-numero="{{ oficio.numero_oficio|lower }}"
                                         data-gad="{{ oficio.gad_parroquial|lower }}"
                                         data-canton="{{ oficio.canton|lower }}"
@@ -171,13 +184,14 @@
                                                 data-fecha-enviado="{{ oficio.fecha_enviado_traditional }}"
                                                 data-numero-oficio="{{ oficio.numero_oficio }}"
                                                 data-gad-parroquial="{{ oficio.gad_parroquial }}"
-                                                data-canton="{{ oficio.canton }}"
-                                                data-detalle="{{ oficio.detalle }}"
+                                                data-canton="{{ oficio.canton }}" data-detalle="{{ oficio.detalle }}"
                                                 data-archivo-nombre="{{ oficio.archivo_nombre or '' }}">
                                                 <i class="bi bi-pencil-square"></i>
                                             </button>
-                                            <form method="POST" action="{{ url_for('receive') }}" style="display:inline;">
+                                            <form method="POST" action="{{ url_for('receive') }}"
+                                                style="display:inline;">
                                                 <input type="hidden" name="delete_oficio" value="{{ oficio._id }}">
+                                                <input type="hidden" name="current_view" value="historial">
                                                 <button type="submit" class="btn btn-sm btn-danger"
                                                     onclick="return confirm('¿Estás seguro de eliminar este oficio?')">
                                                     <i class="bi bi-trash"></i>
@@ -211,9 +225,20 @@
             <!-- Seguimiento Panel -->
             <div id="panel-seguimiento" class="fade-panel">
                 <div class="card">
-                    <div class="card-header">
-                        <i class="bi bi-archive me-2"></i>Seguimiento de Oficios
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-archive me-2"></i>Seguimiento de Oficios
+                        </div>
+                        <div>
+                            <a href="{{ url_for('generate_report', format='pdf') }}" class="btn btn-danger btn-sm me-2">
+                                <i class="bi bi-file-pdf"></i> PDF
+                            </a>
+                            <a href="{{ url_for('generate_report', format='excel') }}" class="btn btn-success btn-sm">
+                                <i class="bi bi-file-excel"></i> Excel
+                            </a>
+                        </div>
                     </div>
+
                     <div class="card-body">
                         <p class="text-muted">Número de oficios: {{ oficios|length }}</p>
                         <div class="mb-4">
@@ -243,19 +268,21 @@
                         <div class="mb-3">
                             <div class="d-flex flex-wrap gap-3">
                                 <div class="d-flex align-items-center">
-                                    <div class="bg-warning" style="width: 20px; height: 20px; border-radius: 3px;"></div>
+                                    <div class="bg-warning" style="width: 20px; height: 20px; border-radius: 3px;">
+                                    </div>
                                     <span class="ms-2 small">Pendiente - Sin asignar técnico</span>
                                 </div>
                                 <div class="d-flex align-items-center">
                                     <div class="bg-danger" style="width: 20px; height: 20px; border-radius: 3px;"></div>
-                                    <span class="ms-2 small">Asignado - Técnico asignado, sin trabajar</span>
+                                    <span class="ms-2 small">Asignado - Técnico asignado, sin completar</span>
                                 </div>
                                 <div class="d-flex align-items-center">
                                     <div class="bg-info" style="width: 20px; height: 20px; border-radius: 3px;"></div>
                                     <span class="ms-2 small">Parcial - Algunos técnicos terminaron</span>
                                 </div>
                                 <div class="d-flex align-items-center">
-                                    <div class="bg-success" style="width: 20px; height: 20px; border-radius: 3px;"></div>
+                                    <div class="bg-success" style="width: 20px; height: 20px; border-radius: 3px;">
+                                    </div>
                                     <span class="ms-2 small">Concluido - Todos los técnicos terminaron</span>
                                 </div>
                             </div>
@@ -264,13 +291,14 @@
                             <table class="table table-hover table-sm align-middle" id="seguimiento-registros">
                                 <thead>
                                     <tr>
-                                        <th>ID</th>
+                                        <th style="cursor: pointer;" onclick="sortSeguimientoById()"
+                                            title="Click para ordenar">ID <i id="sort-icon-seguimiento"
+                                                class="bi bi-arrow-down-up"></i></th>
                                         <th>Número Oficio</th>
                                         <th>Parroquia</th>
                                         <th>Cantón</th>
                                         <th>Estado</th>
-                                        <th>Técnico</th>
-                                        <th>Tipo Asesoría</th>
+                                        <th>Técnicos / Asignaciones</th>
                                         <th>Sub-Estado</th>
                                         <th>Fecha Asesoría</th>
                                         <th>Anexos</th>
@@ -299,13 +327,12 @@
                                     <tr data-id="{{ oficio.id_secuencial }}"
                                         data-numero="{{ oficio.numero_oficio|lower }}"
                                         data-gad="{{ oficio.gad_parroquial|lower }}"
-                                        data-canton="{{ oficio.canton|lower }}"
-                                        data-estado="{{ oficio.estado|lower }}"
+                                        data-canton="{{ oficio.canton|lower }}" data-estado="{{ oficio.estado|lower }}"
                                         data-tecnico="{{ tecnicos_list|join(',')|lower }}"
                                         data-tipo_asesoria="{{ tipos_list|join(',')|lower }}"
                                         data-sub_estado="{{ sub_estados_list|join(',')|lower }}"
                                         data-anexos="{{ 'true' if anexos_list|select|list else 'false' }}"
-                                        class="{% if oficio.estado == 'pendiente' %}table-warning{% elif oficio.estado == 'completado' %}table-success{% elif oficio.estado == 'designado' %}{% set concluidos = assignments|selectattr('sub_estado', 'equalto', 'Concluido')|list %}{% set total = assignments|length %}{% if concluidos|length == total and total > 0 %}table-success{% elif concluidos|length > 0 %}table-info{% else %}table-danger{% endif %}{% endif %}">
+                                        class="{% if oficio.estado == 'pendiente' %}table-warning{% elif assignments %}{% set concluidos = assignments|selectattr('sub_estado', 'equalto', 'Concluido')|list %}{% set total = assignments|length %}{% if concluidos|length == total and total > 0 %}table-success{% elif concluidos|length > 0 %}table-info{% else %}table-danger{% endif %}{% else %}table-warning{% endif %}">
                                         <td>{{ oficio.id_secuencial }}</td>
                                         <td>{{ oficio.numero_oficio }}</td>
                                         <td>{{ oficio.gad_parroquial }}</td>
@@ -316,18 +343,10 @@
                                             {% for assignment in assignments %}
                                             {% for user in users %}
                                             {% if user.username == assignment.tecnico %}
-                                            <div class="mb-1">{{ user.full_name }}</div>
+                                            <div class="mb-1"><strong>{{ user.full_name }}</strong> - {{
+                                                assignment.tipo_asesoria }}</div>
                                             {% endif %}
                                             {% endfor %}
-                                            {% endfor %}
-                                            {% else %}
-                                            -
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if assignments %}
-                                            {% for assignment in assignments %}
-                                            <div class="mb-1">{{ assignment.tipo_asesoria }}</div>
                                             {% endfor %}
                                             {% else %}
                                             -
@@ -411,17 +430,21 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
-                            <form method="POST" action="{{ url_for('receive') }}" enctype="multipart/form-data" novalidate>
+                            <form method="POST" action="{{ url_for('receive') }}" enctype="multipart/form-data"
+                                novalidate>
                                 <input type="hidden" name="edit_oficio" value="true">
                                 <input type="hidden" name="oficio_id" id="edit_oficio_id">
+                                <input type="hidden" name="current_view" value="historial">
                                 <div class="mb-3">
                                     <label for="edit_fecha_enviado" class="form-label">Fecha Enviado</label>
-                                    <input type="date" class="form-control" id="edit_fecha_enviado" name="fecha_enviado" placeholder="dd/mm/aaaa" required>
+                                    <input type="date" class="form-control" id="edit_fecha_enviado" name="fecha_enviado"
+                                        placeholder="dd/mm/aaaa" required>
                                     <div class="invalid-feedback">Por favor, seleccione una fecha.</div>
                                 </div>
                                 <div class="mb-3">
                                     <label for="edit_numero_oficio" class="form-label">Número de Oficio</label>
-                                    <input type="text" class="form-control" id="edit_numero_oficio" name="numero_oficio" required>
+                                    <input type="text" class="form-control" id="edit_numero_oficio" name="numero_oficio"
+                                        required>
                                     <div class="invalid-feedback">Por favor, ingrese el número de oficio.</div>
                                 </div>
                                 <div class="mb-3">
@@ -437,18 +460,23 @@
                                 </div>
                                 <div class="mb-3">
                                     <label for="edit_canton" class="form-label">Cantón</label>
-                                    <input type="text" class="form-control" id="edit_canton" name="canton" readonly required>
-                                    <div class="invalid-feedback">Por favor, seleccione un GAD parroquial para cargar el cantón.</div>
+                                    <input type="text" class="form-control" id="edit_canton" name="canton" readonly
+                                        required>
+                                    <div class="invalid-feedback">Por favor, seleccione un GAD parroquial para cargar el
+                                        cantón.</div>
                                 </div>
                                 <div class="mb-3">
                                     <label for="edit_detalle" class="form-label">Detalle</label>
-                                    <textarea class="form-control" id="edit_detalle" name="detalle" rows="4" required></textarea>
+                                    <textarea class="form-control" id="edit_detalle" name="detalle" rows="4"
+                                        required></textarea>
                                     <div class="invalid-feedback">Por favor, ingrese el detalle.</div>
                                 </div>
                                 <div class="mb-3">
                                     <label for="edit_archivo" class="form-label">Subir Archivo (PDF, opcional)</label>
-                                    <input type="file" class="form-control" id="edit_archivo" name="archivo" accept=".pdf">
-                                    <div id="current_archivo" class="form-text"></div>
+                                    <input type="file" class="form-control" id="edit_archivo" name="archivo"
+                                        accept=".pdf">
+                                    <label class="form-text">Archivo subido:</label>
+                                    <span id="current_archivo_name" class="form-text"></span>
                                 </div>
                                 <button type="submit" class="btn btn-primary">Guardar Cambios</button>
                             </form>
@@ -458,7 +486,8 @@
             </div>
 
             <!-- Confirm Modal -->
-            <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
+            <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel"
+                aria-hidden="true">
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -483,7 +512,8 @@
             </div>
 
             <!-- Preview Modal -->
-            <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+            <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel"
+                aria-hidden="true">
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -492,9 +522,11 @@
                         </div>
                         <div class="modal-body">
                             <div id="previewContainer">
-                                <iframe id="previewFrame" style="width:100%;height:500px;" title="Vista previa del archivo"></iframe>
+                                <iframe id="previewFrame" style="width:100%;height:500px;"
+                                    title="Vista previa del archivo"></iframe>
                                 <div id="previewError" class="d-none text-danger text-center">
-                                    No se puede mostrar la vista previa del archivo. Asegúrese de que el archivo sea un PDF válido o descárguelo para verlo.
+                                    No se puede mostrar la vista previa del archivo. Asegúrese de que el archivo sea un
+                                    PDF válido o descárguelo para verlo.
                                 </div>
                             </div>
                         </div>
@@ -518,17 +550,20 @@
                             <form method="POST" action="{{ url_for('change_password') }}" novalidate>
                                 <div class="mb-3">
                                     <label for="old_password" class="form-label">Contraseña Anterior</label>
-                                    <input type="password" class="form-control" id="old_password" name="old_password" required>
+                                    <input type="password" class="form-control" id="old_password" name="old_password"
+                                        required>
                                     <div class="invalid-feedback">Por favor, ingrese la contraseña anterior.</div>
                                 </div>
                                 <div class="mb-3">
                                     <label for="new_password" class="form-label">Nueva Contraseña</label>
-                                    <input type="password" class="form-control" id="new_password" name="new_password" required>
+                                    <input type="password" class="form-control" id="new_password" name="new_password"
+                                        required>
                                     <div class="invalid-feedback">Por favor, ingrese una nueva contraseña.</div>
                                 </div>
                                 <div class="mb-3">
                                     <label for="confirm_password" class="form-label">Confirmar Nueva Contraseña</label>
-                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                                    <input type="password" class="form-control" id="confirm_password"
+                                        name="confirm_password" required>
                                     <div class="invalid-feedback">Por favor, confirme la nueva contraseña.</div>
                                 </div>
                                 <button type="submit" class="btn btn-success">Guardar</button>
@@ -539,7 +574,8 @@
             </div>
 
             <!-- Informe Modal -->
-            <div class="modal fade" id="informeModal" tabindex="-1" aria-labelledby="informeModalLabel" aria-hidden="true">
+            <div class="modal fade" id="informeModal" tabindex="-1" aria-labelledby="informeModalLabel"
+                aria-hidden="true">
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -582,5 +618,6 @@
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
         <script src="{{ url_for('static', filename='script.js') }}"></script>
 
-    </body>
+</body>
+
 </html>

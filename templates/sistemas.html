@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
-<body>
+<body data-current-view="{{ current_view }}" data-current-role="sistemas">
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">Inventario Conagopare</a>
@@ -73,6 +73,7 @@
                     <form id="addProductForm" method="POST" action="{{ url_for('sistemas') }}"
                         enctype="multipart/form-data">
                         <input type="hidden" name="add_product" value="true">
+                        <input type="hidden" name="current_view" value="add-product">
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label for="codigo" class="form-label">Código</label>
@@ -232,6 +233,7 @@
                                         <form method="POST" action="{{ url_for('sistemas') }}" style="display:inline;">
                                             <input type="hidden" name="product_id" value="{{ product._id }}">
                                             <input type="hidden" name="delete_product" value="true">
+                                            <input type="hidden" name="current_view" value="inventory">
                                             <button type="submit" class="btn btn-sm btn-danger"
                                                 onclick="return confirm('¿Está seguro de eliminar este producto?')">Eliminar</button>
                                         </form>
@@ -391,6 +393,7 @@
                             enctype="multipart/form-data">
                             <input type="hidden" name="edit_product" value="true">
                             <input type="hidden" id="edit_product_id" name="product_id">
+                            <input type="hidden" name="current_view" value="inventory">
                             <div class="row g-3">
                                 <div class="col-md-4">
                                     <label for="edit_codigo" class="form-label">Código</label>

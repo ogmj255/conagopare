@@ -10,7 +10,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 
-<body>
+<body data-current-view="{{ current_view }}" data-current-role="design">
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">Sistema de Gestión de Oficios</a>
@@ -21,15 +21,15 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link active" id="tab-pendientes" onclick="showPanel('pendientes')"
+                        <a class="nav-link {{ 'active' if current_view == 'pendientes' else '' }}" id="tab-pendientes" onclick="showPanel('pendientes')"
                             href="#">Pendientes</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" id="tab-designados" onclick="showPanel('designados')"
+                        <a class="nav-link {{ 'active' if current_view == 'designados' else '' }}" id="tab-designados" onclick="showPanel('designados')"
                             href="#">Designados</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" id="tab-seguimiento" onclick="showPanel('seguimiento')"
+                        <a class="nav-link {{ 'active' if current_view == 'seguimiento' else '' }}" id="tab-seguimiento" onclick="showPanel('seguimiento')"
                             href="#">Seguimiento</a>
                     </li>
                 </ul>
@@ -87,7 +87,7 @@
 
         <div class="main-container">
             <!-- Pendientes Panel -->
-            <div id="panel-pendientes" class="fade-panel active">
+            <div id="panel-pendientes" class="fade-panel {{ 'active' if current_view == 'pendientes' else '' }}">
                 <div class="card">
                     <div class="card-header">
                         <i class="bi bi-file-earmark-text"></i> Pendientes
@@ -99,7 +99,7 @@
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
-                                        <th>ID</th>
+                                        <th style="cursor: pointer;" onclick="sortPendientesById()" title="Click para ordenar">ID <i id="sort-icon-pendientes" class="bi bi-arrow-down-up"></i></th>
                                         <th>Número Oficio</th>
                                         <th>Fecha Envío</th>
                                         <th>GAD Parroquial</th>
@@ -157,7 +157,7 @@
             <!-- Designados Panel -->
 
             <!-- Designados Panel -->
-            <div id="panel-designados" class="fade-panel">
+            <div id="panel-designados" class="fade-panel {{ 'active' if current_view == 'designados' else '' }}">
                 <div class="card">
                     <div class="card-header">
                         <i class="bi bi-file-earmark-text"></i> Designados
@@ -190,7 +190,7 @@
                             <table class="table table-hover" id="designadosTable">
                                 <thead>
                                     <tr>
-                                        <th>ID</th>
+                                        <th style="cursor: pointer;" onclick="sortDesignadosById()" title="Click para ordenar">ID <i id="sort-icon-designados" class="bi bi-arrow-down-up"></i></th>
                                         <th>Número Oficio</th>
                                         <th>Detalle</th>
                                         <th>Técnicos / Asignaciones</th>
@@ -203,10 +203,8 @@
                                     {% set assignments = oficio.assignments if oficio.assignments else [] %}
                                     {% set tecnicos_list = [] %}
                                     {% for assignment in assignments %}
-                                    {% set tecnico_data = tecnicos | selectattr('username', 'equalto',
-                                    assignment.tecnico) | first %}
-                                    {% set tecnico_full_name = tecnico_data.full_name | default(assignment.tecnico,
-                                    true) %}
+                                    {% set tecnico_data = users | selectattr('username', 'equalto', assignment.tecnico) | list %}
+                                    {% set tecnico_full_name = tecnico_data[0].full_name if tecnico_data else assignment.tecnico %}
                                     {% set _ = tecnicos_list.append(tecnico_full_name | lower) %}
                                     {% endfor %}
                                     {% set tecnicos_list = tecnicos_list | join(',') %}
@@ -224,12 +222,10 @@
                                         <td class="assignment-cell">
                                             {% if assignments %}
                                             {% for assignment in assignments %}
-                                            {% set tecnico_data = tecnicos | selectattr('username', 'equalto',
-                                            assignment.tecnico) | first %}
-                                            {% set tecnico_full_name = tecnico_data.full_name |
-                                            default(assignment.tecnico, true) %}
+                                            {% set tecnico_data = users | selectattr('username', 'equalto', assignment.tecnico) | list %}
+                                            {% set tecnico_full_name = tecnico_data[0].full_name if tecnico_data else assignment.tecnico %}
                                             <div class="assignment-entry">
-                                                <span class="tecnico-name">{{ tecnico_full_name }} - </span>
+                                                <span class="tecnico-name"><strong>{{ tecnico_full_name }}</strong> - </span>
                                                 <span class="tipo-asesoria">{{ assignment.tipo_asesoria }}</span>
                                             </div><br>
                                             {% endfor %}
@@ -237,7 +233,7 @@
                                             <span class="text-muted">Sin asignaciones</span>
                                             {% endif %}
                                         </td>
-                                        <td>{{ oficio.fecha_designacion_formatted if oficio.fecha_designacion else '' }}
+                                        <td>{{ oficio.fecha_designacion_with_time if oficio.fecha_designacion_with_time else '' }}
                                         </td>
                                         <td>
                                             <button type="button" class="btn btn-sm btn-primary edit-btn"
@@ -275,7 +271,7 @@
                 </div>
             </div>
             <!-- Seguimiento Panel -->
-            <div id="panel-seguimiento" class="fade-panel">
+            <div id="panel-seguimiento" class="fade-panel {{ 'active' if current_view == 'seguimiento' else '' }}">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div>
@@ -340,13 +336,12 @@
                             <table class="table table-hover table-sm align-middle" id="seguimiento-registros">
                                 <thead>
                                     <tr>
-                                        <th>ID</th>
+                                        <th style="cursor: pointer;" onclick="sortSeguimientoDesignById()" title="Click para ordenar">ID <i id="sort-icon-seguimiento-design" class="bi bi-arrow-down-up"></i></th>
                                         <th>Número Oficio</th>
                                         <th>Parroquia</th>
                                         <th>Cantón</th>
                                         <th>Estado</th>
-                                        <th>Técnico</th>
-                                        <th>Tipo Asesoría</th>
+                                        <th>Técnicos / Asignaciones</th>
                                         <th>Sub-Estado</th>
                                         <th>Fecha Asesoría</th>
                                         <th>Anexos</th>
@@ -362,8 +357,8 @@
                                     {% set fechas_list = [] %}
                                     {% set anexos_list = [] %}
                                     {% for assignment in assignments %}
-                                    {% set tecnico_data = users | selectattr('username', 'equalto', assignment.tecnico) | first %}
-                                    {% set tecnico_full_name = tecnico_data.full_name | default(assignment.tecnico, true) %}
+                                    {% set tecnico_data = users | selectattr('username', 'equalto', assignment.tecnico) | list %}
+                                    {% set tecnico_full_name = tecnico_data[0].full_name if tecnico_data else assignment.tecnico %}
                                     {% set _ = tecnicos_list.append(tecnico_full_name) %}
                                     {% set _ = tipos_list.append(assignment.tipo_asesoria) %}
                                     {% set _ = sub_estados_list.append(assignment.sub_estado or 'Asignado') %}
@@ -379,7 +374,7 @@
                                         data-tipo_asesoria="{{ tipos_list|join(',')|lower }}"
                                         data-sub_estado="{{ sub_estados_list|join(',')|lower }}"
                                         data-anexos="{{ 'true' if anexos_list|select|list else 'false' }}"
-                                        class="{% if oficio.estado == 'pendiente' %}table-warning{% elif oficio.estado == 'completado' %}table-success{% elif oficio.estado == 'designado' %}{% set concluidos = assignments|selectattr('sub_estado', 'equalto', 'Concluido')|list %}{% set total = assignments|length %}{% if concluidos|length == total and total > 0 %}table-success{% elif concluidos|length > 0 %}table-info{% else %}table-danger{% endif %}{% endif %}">
+                                        class="{% if oficio.estado == 'pendiente' %}table-warning{% elif assignments %}{% set concluidos = assignments|selectattr('sub_estado', 'equalto', 'Concluido')|list %}{% set total = assignments|length %}{% if concluidos|length == total and total > 0 %}table-success{% elif concluidos|length > 0 %}table-info{% else %}table-danger{% endif %}{% else %}table-warning{% endif %}">
                                         <td>{{ oficio.id_secuencial }}</td>
                                         <td>{{ oficio.numero_oficio }}</td>
                                         <td>{{ oficio.gad_parroquial }}</td>
@@ -388,18 +383,9 @@
                                         <td>
                                             {% if assignments %}
                                             {% for assignment in assignments %}
-                                            {% set tecnico_data = users | selectattr('username', 'equalto', assignment.tecnico) | first %}
-                                            {% set tecnico_full_name = tecnico_data.full_name | default(assignment.tecnico, true) %}
-                                            <div class="mb-1">{{ tecnico_full_name }}</div>
-                                            {% endfor %}
-                                            {% else %}
-                                            -
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if assignments %}
-                                            {% for assignment in assignments %}
-                                            <div class="mb-1">{{ assignment.tipo_asesoria }}</div>
+                                            {% set tecnico_data = users | selectattr('username', 'equalto', assignment.tecnico) | list %}
+                                            {% set tecnico_full_name = tecnico_data[0].full_name if tecnico_data else assignment.tecnico %}
+                                            <div class="mb-1"><strong>{{ tecnico_full_name }}</strong> - {{ assignment.tipo_asesoria }}</div>
                                             {% endfor %}
                                             {% else %}
                                             -
@@ -490,17 +476,17 @@
                                     <div class="tecnico-asesoria-pair mb-2">
                                         <div class="row g-2 align-items-center">
                                             <div class="col">
-                                                <select name="tecnico_asignado[]" class="form-select form-select-sm"
+                                                <select name="tecnico_asignado[]" class="form-select form-select-sm tecnico-select"
                                                     required>
                                                     <option value="" disabled selected>Seleccione Técnico</option>
-                                                    {% for tecnico in tecnicos %}
+                                                    {% for tecnico in users %}
                                                     <option value="{{ tecnico.username }}">{{ tecnico.full_name |
                                                         default(tecnico.username, true) }}</option>
                                                     {% endfor %}
                                                 </select>
                                             </div>
                                             <div class="col">
-                                                <select name="tipo_asesoria[]" class="form-select form-select-sm"
+                                                <select name="tipo_asesoria[]" class="form-select form-select-sm tipo-select"
                                                     required>
                                                     <option value="" disabled selected>Tipo Asesoría</option>
                                                     {% for tipo in tipos_asesoria %}
@@ -518,6 +504,19 @@
                                 <button type="button" class="btn btn-sm btn-primary mt-2"
                                     onclick="addTechnicianPair(document.getElementById('assignments'))">Añadir
                                     Técnico</button>
+                                <script>
+                                document.addEventListener('DOMContentLoaded', function() {
+                                    const designModal = document.getElementById('designModal');
+                                    designModal.addEventListener('shown.bs.modal', function() {
+                                        const tecnicoSelect = designModal.querySelector('.tecnico-select');
+                                        const tipoSelect = designModal.querySelector('.tipo-select');
+                                        
+                                        tecnicoSelect.addEventListener('change', function() {
+                                            updateTiposAsesoriaByTecnico(tecnicoSelect, tipoSelect);
+                                        });
+                                    });
+                                });
+                                </script>
                                 <button type="submit" name="designar"
                                     class="btn btn-sm btn-success mt-2">Designar</button>
                             </form>
@@ -651,7 +650,6 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body" id="informeContent">
-                            <!-- Content will be loaded here -->
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
@@ -683,13 +681,86 @@
             </div>
         </div>
     </div>
-    <div id="data-tecnicos" style="display:none;">{{ tecnicos | tojson | safe }}</div>
+    <div id="data-tecnicos" style="display:none;">{{ users | tojson | safe }}</div>
     <div id="data-tipos-asesoria" style="display:none;">{{ tipos_asesoria | tojson | safe }}</div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
-
+    <script>
+    const oficiosData = {
+        {% for oficio in oficios %}
+        '{{ oficio._id }}': {
+            'assignments': [
+                {% for assignment in oficio.assignments %}
+                {
+                    'tecnico': {{ (assignment.tecnico or '') | tojson | safe }},
+                    'tipo_asesoria': {{ (assignment.tipo_asesoria or '') | tojson | safe }},
+                    'sub_estado': {{ (assignment.sub_estado or 'Asignado') | tojson | safe }},
+                    'desarrollo_actividad': {{ (assignment.desarrollo_actividad or '') | tojson | safe }},
+                    'fecha_asesoria_formatted': {{ (assignment.fecha_asesoria_formatted or 'N/A') | tojson | safe }},
+                    'entrega_recepcion': {{ (assignment.entrega_recepcion or 'No Aplica') | tojson | safe }},
+                    'oficio_delegacion': {{ (assignment.oficio_delegacion or '') | tojson | safe }},
+                    'acta_entrega': {{ (assignment.acta_entrega or '') | tojson | safe }},
+                    'anexo_nombre': {{ (assignment.anexo_nombre or '') | tojson | safe }}
+                }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ]
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    };
+    
+    function showInforme(oficioId, numeroOficio, parroquia, canton) {
+        const users = {{ users | tojson | safe }};
+        const oficio = oficiosData[oficioId];
+        
+        if (!oficio || !oficio.assignments) {
+            document.getElementById('informeContent').innerHTML = '<p class="text-muted">No hay información disponible.</p>';
+            return;
+        }
+        
+        let content = `
+            <div class="mb-3">
+                <h6><strong>Oficio:</strong> ${numeroOficio}</h6>
+                <p><strong>Parroquia:</strong> ${parroquia} - <strong>Cantón:</strong> ${canton}</p>
+            </div>
+            <hr>
+        `;
+        
+        oficio.assignments.forEach((assignment, index) => {
+            const user = users.find(u => u.username === assignment.tecnico);
+            const tecnicoName = user ? user.full_name : assignment.tecnico;
+            
+            content += `
+                <div class="mb-4">
+                    <h6 class="text-primary">Técnico: ${tecnicoName}</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Tipo Asesoría:</strong> ${assignment.tipo_asesoria || 'N/A'}</p>
+                            <p><strong>Estado:</strong> <span class="badge ${assignment.sub_estado === 'Concluido' ? 'bg-success' : assignment.sub_estado === 'En proceso' ? 'bg-warning' : 'bg-danger'}">${assignment.sub_estado || 'Asignado'}</span></p>
+                            <p><strong>Fecha Asesoría:</strong> ${assignment.fecha_asesoria_formatted || 'N/A'}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Entrega Recepción:</strong> ${assignment.entrega_recepcion || 'No Aplica'}</p>
+                            ${assignment.entrega_recepcion === 'Aplica' ? `
+                                <p><strong>Oficio Delegación:</strong> ${assignment.oficio_delegacion || 'N/A'}</p>
+                                <p><strong>Acta Entrega:</strong> ${assignment.acta_entrega || 'N/A'}</p>
+                            ` : ''}
+                            <p><strong>Anexo:</strong> ${assignment.anexo_nombre ? 'Sí' : 'No'}</p>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <p><strong>Desarrollo de Actividad:</strong></p>
+                        <div class="bg-light p-2 rounded">${assignment.desarrollo_actividad || 'Sin descripción'}</div>
+                    </div>
+                    ${index < oficio.assignments.length - 1 ? '<hr>' : ''}
+                </div>
+            `;
+        });
+        
+        document.getElementById('informeContent').innerHTML = content;
+    }
+    </script>
 </body>
 
 </html>

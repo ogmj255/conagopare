@@ -1,0 +1,44 @@
+<!-- Panel Historial de Tareas Finalizadas Reutilizable -->
+<div class="card">
+    <div class="card-header">Historial de Tareas Finalizadas</div>
+    <div class="card-body">
+        <p class="text-muted">Número de tareas finalizadas: {{ completados|length }}</p>
+        {% if completados %}
+        {% for oficio in completados %}
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="card-title">Oficio ID: {{ oficio.id_secuencial }} - Número: {{ oficio.numero_oficio }}</h6>
+                <p class="card-text"><strong>Parroquia:</strong> {{ oficio.gad_parroquial }} -
+                    <strong>Cantón:</strong> {{ oficio.canton }}
+                </p>
+                <p class="card-text"><strong>Detalle:</strong> {{ oficio.detalle }}</p>
+                <p class="card-text"><strong>Tipo Asesoría:</strong> {{ oficio.tipo_asesoria }}</p>
+                <p class="card-text"><strong>Fecha Designación:</strong> {{ oficio.fecha_designacion_formatted or 'No especificado' }}</p>
+                <p class="card-text"><strong>Desarrollo de Actividad:</strong> {{ oficio.desarrollo_actividad or 'No especificado' }}</p>
+                <p class="card-text"><strong>Estado:</strong> {{ oficio.sub_estado or 'Concluido' }}</p>
+                <p class="card-text"><strong>Fecha Asesoría:</strong> {{ oficio.fecha_asesoria_formatted or 'No especificado' }}</p>
+                <p class="card-text"><strong>Entrega Recepción:</strong> {{ oficio.entrega_recepcion or 'No especificado' }}</p>
+                {% if oficio.entrega_recepcion == 'Aplica' %}
+                <p class="card-text"><strong>Oficio de Delegación:</strong> {{ oficio.oficio_delegacion or 'No especificado' }}</p>
+                <p class="card-text"><strong>Acta de Entrega:</strong> {{ oficio.acta_entrega or 'No especificado' }}</p>
+                {% endif %}
+                <p class="card-text">
+                    <strong>Anexos:</strong>
+                    {% if oficio.anexo_nombre %}
+                    {{ oficio.anexo_nombre }}
+                    <a href="{{ url_for('download_anexo', oficio_id=oficio._id, tecnico=current_user.username) }}"
+                        class="btn btn-sm btn-info ms-2" title="Descargar Anexo">
+                        <i class="bi bi-download"></i> Descargar Anexo
+                    </a>
+                    {% else %}
+                    No especificado
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted">Sin tareas finalizadas.</p>
+        {% endif %}
+    </div>
+</div>

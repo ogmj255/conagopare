@@ -1,0 +1,222 @@
+<!-- Panel Técnico Reutilizable -->
+<div class="card">
+    <div class="card-header">Asignaciones Pendientes</div>
+    <div class="card-body">
+        <p class="text-muted">Número de asignaciones pendientes: {{ asignados|length if asignados else 0 }}</p>
+        {% if asignados %}
+        <div class="accordion" id="accordionAsignados">
+            {% for oficio in asignados %}
+            <div class="accordion-item mb-2">
+                <h2 class="accordion-header" id="heading{{ loop.index }}">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapse{{ loop.index }}" aria-expanded="false"
+                        aria-controls="collapse{{ loop.index }}">
+                        <div>
+                            <strong>Oficio ID:</strong> {{ oficio.id_secuencial }} -
+                            <strong>Número:</strong> {{ oficio.numero_oficio }}<br>
+                            <strong>Parroquia:</strong> {{ oficio.gad_parroquial }} -
+                            <strong>Cantón:</strong> {{ oficio.canton }}<br>
+                            <strong>Detalle:</strong> {{ oficio.detalle }}<br>
+                            <strong>Tipo Asesoría:</strong> {{ oficio.tipo_asesoria }}<br>
+                            {% if oficio.tecnico_name %}<strong>Técnico:</strong> {{ oficio.tecnico_name }}<br>{% endif %}
+                            <strong>Fecha Designación:</strong> {{ oficio.fecha_designacion_formatted or 'No especificado' }}<br>
+                            <strong>Estado:</strong> {{ oficio.sub_estado or 'Asignado' }}
+                        </div>
+                    </button>
+                </h2>
+                <div id="collapse{{ loop.index }}" class="accordion-collapse collapse"
+                    aria-labelledby="heading{{ loop.index }}" data-bs-parent="#accordionAsignados">
+                    <div class="accordion-body">
+                        {% if editable %}
+                        <!-- Versión editable para técnicos -->
+                        <form method="POST" id="form-{{ oficio._id }}" action="{{ url_for(form_action) }}"
+                            enctype="multipart/form-data">
+                            <input type="hidden" name="oficio_id" value="{{ oficio._id }}">
+                            <input type="hidden" name="numero_oficio" value="{{ oficio.numero_oficio }}">
+                            <div class="mb-3">
+                                <label class="form-label">Archivo del Oficio: </label>
+                                <td>
+                                    {% if oficio.archivo_nombre %}
+                                    <button type="button" class="btn btn-primary btn-sm preview-btn"
+                                        data-bs-toggle="modal" data-bs-target="#previewModal"
+                                        data-id="{{ oficio._id }}"
+                                        data-archivo-nombre="{{ oficio.archivo_nombre }}">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                    <a href="{{ url_for('download', oficio_id=oficio._id) }}"
+                                        class="btn btn-info btn-sm" title="Descargar">
+                                        <i class="bi bi-download"></i>
+                                    </a>
+                                    {% else %}
+                                    <span class="text-muted">Sin archivo</span>
+                                    {% endif %}
+                                </td>
+                                <div></div>
+                                <label for="desarrollo_actividad_{{ oficio._id }}" class="form-label">Desarrollo de Actividad</label>
+                                <textarea class="form-control" id="desarrollo_actividad_{{ oficio._id }}" name="desarrollo_actividad" rows="4">{{ oficio.desarrollo_actividad or '' }}</textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="fecha_asesoria_{{ oficio._id }}" class="form-label">Fecha de Asesoría</label>
+                                <input type="date" class="form-control" id="fecha_asesoria_{{ oficio._id }}" name="fecha_asesoria" value="{{ oficio.fecha_asesoria or '' }}">
+                            </div>
+                            <div class="mb-3">
+                                <label for="sub_estado_{{ oficio._id }}" class="form-label">Estado</label>
+                                <select class="form-select" id="sub_estado_{{ oficio._id }}" name="sub_estado">
+                                    <option value="Asignado" {% if oficio.sub_estado=='Asignado' %}selected{% endif %}>Asignado</option>
+                                    <option value="En proceso" {% if oficio.sub_estado=='En proceso' %}selected{% endif %}>En proceso</option>
+                                    <option value="Negado" {% if oficio.sub_estado=='Negado' %}selected{% endif %}>Negado</option>
+                                    <option value="Concluido" {% if oficio.sub_estado=='Concluido' %}selected{% endif %}>Concluido</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="entrega_recepcion_{{ oficio._id }}" class="form-label">Entrega de Recepción de Obra</label>
+                                <select class="form-select" id="entrega_recepcion_{{ oficio._id }}" name="entrega_recepcion" onchange="toggleEntregaFields('{{ oficio._id }}')">
+                                    <option value="Aplica" {% if oficio.entrega_recepcion=='Aplica' %}selected{% endif %}>Aplica</option>
+                                    <option value="No Aplica" {% if oficio.entrega_recepcion=='No Aplica' %}selected{% endif %}>No Aplica</option>
+                                </select>
+                            </div>
+                            <div class="mb-3 entrega-fields" id="entrega_fields_{{ oficio._id }}" {% if oficio.entrega_recepcion !='Aplica' %}style="display: none;" {% endif %}>
+                                <label for="oficio_delegacion_{{ oficio._id }}" class="form-label">Oficio de Delegación</label>
+                                <input type="text" class="form-control" id="oficio_delegacion_{{ oficio._id }}" name="oficio_delegacion" value="{{ oficio.oficio_delegacion or '' }}">
+                            </div>
+                            <div class="mb-3 entrega-fields" id="acta_entrega_field_{{ oficio._id }}" {% if oficio.entrega_recepcion !='Aplica' %}style="display: none;" {% endif %}>
+                                <label for="acta_entrega_{{ oficio._id }}" class="form-label">Acta de Entrega</label>
+                                <input type="text" class="form-control" id="acta_entrega_{{ oficio._id }}" name="acta_entrega" value="{{ oficio.acta_entrega or '' }}">
+                            </div>
+                            <br>
+                            <div class="mb-3 entrega-fields">
+                                <label for="anexo_{{ oficio._id }}" class="form-label">Subir Anexo (opcional)</label>
+                                <input type="file" class="form-control" id="anexo_{{ oficio._id }}" name="anexo" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                                <small class="form-text text-muted" id="anexo_nombre_{{ oficio._id }}">
+                                    {% if oficio.anexo_nombre %}
+                                    Archivo actual: {{ oficio.anexo_nombre }}
+                                    {% else %}
+                                    Ningún archivo seleccionado
+                                    {% endif %}
+                                </small>
+                                <br>
+                                {% if oficio.anexo_nombre %}
+                                <a href="{{ url_for('download_anexo', oficio_id=oficio._id, tecnico=current_user.username) }}" class="btn btn-sm btn-info mt-2" title="Ver Anexo" target="_blank">
+                                    <i class="bi bi-eye"></i> Ver Anexo Adjunto
+                                </a>
+                                {% endif %}
+                            </div>
+                            <input type="hidden" name="entregar" value="0">
+                            <button type="submit" class="btn btn-success" name="actualizar">Actualizar</button>
+                        </form>
+                        <button type="button" class="btn btn-primary mt-2 entregar-btn" onclick="validateAndShowEntregarModal('{{ oficio._id }}')">Entregar</button>
+                        
+                        <!-- Modales de confirmación -->
+                        <div class="modal fade" id="confirmEntregarModal_{{ oficio._id }}" tabindex="-1" aria-labelledby="confirmEntregarModalLabel_{{ oficio._id }}" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="confirmEntregarModalLabel_{{ oficio._id }}">Confirmar Entrega</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <span class="text-danger fw-bold">
+                                            ¡Advertencia! Una vez entregada la asignación, no será posible volver a editarla. ¿Está seguro de que desea continuar?
+                                        </span>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="button" class="btn btn-primary" onclick="confirmarEntrega('{{ oficio._id }}')">Confirmar Entrega</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="modal fade" id="confirmActualizarModal_{{ oficio._id }}" tabindex="-1" aria-labelledby="confirmActualizarModalLabel_{{ oficio._id }}" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="confirmActualizarModalLabel_{{ oficio._id }}">Confirmar Actualización</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <span class="text-warning fw-bold">
+                                            La actividad está marcada como "Concluida". Se entregará y no será posible volver a editar. ¿Está seguro de que desea actualizar?
+                                        </span>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="button" class="btn btn-success" onclick="submitActualizarForm('{{ oficio._id }}')">Confirmar Actualización</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <!-- Versión solo lectura para otros roles -->
+                        {% if oficio.tecnico_name %}
+                        <div class="mb-3">
+                            <label class="form-label">Técnico Asignado</label>
+                            <div class="bg-light p-2 rounded">{{ oficio.tecnico_name }}</div>
+                        </div>
+                        {% endif %}
+                        <div class="mb-3">
+                            <label class="form-label">Archivo del Oficio: </label>
+                            {% if oficio.archivo_nombre %}
+                            <button type="button" class="btn btn-primary btn-sm preview-btn"
+                                data-bs-toggle="modal" data-bs-target="#previewModal"
+                                data-id="{{ oficio._id }}"
+                                data-archivo-nombre="{{ oficio.archivo_nombre }}">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <a href="{{ url_for('download', oficio_id=oficio._id) }}"
+                                class="btn btn-info btn-sm" title="Descargar">
+                                <i class="bi bi-download"></i>
+                            </a>
+                            {% else %}
+                            <span class="text-muted">Sin archivo</span>
+                            {% endif %}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Desarrollo de Actividad</label>
+                            <div class="bg-light p-2 rounded">{{ oficio.desarrollo_actividad or 'Sin descripción' }}</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Fecha de Asesoría</label>
+                            <div class="bg-light p-2 rounded">{{ oficio.fecha_asesoria_traditional or 'N/A' }}</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Estado</label>
+                            <div class="bg-light p-2 rounded">{{ oficio.sub_estado or 'Asignado' }}</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Entrega de Recepción de Obra</label>
+                            <div class="bg-light p-2 rounded">{{ oficio.entrega_recepcion or 'No Aplica' }}</div>
+                        </div>
+                        {% if oficio.entrega_recepcion == 'Aplica' %}
+                        <div class="mb-3">
+                            <label class="form-label">Oficio de Delegación</label>
+                            <div class="bg-light p-2 rounded">{{ oficio.oficio_delegacion or 'No especificado' }}</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Acta de Entrega</label>
+                            <div class="bg-light p-2 rounded">{{ oficio.acta_entrega or 'No especificado' }}</div>
+                        </div>
+                        {% endif %}
+                        {% if oficio.anexo_nombre %}
+                        <div class="mb-3">
+                            <label class="form-label">Anexo</label>
+                            <div class="bg-light p-2 rounded">
+                                {{ oficio.anexo_nombre }}
+                                <a href="{{ url_for('download_anexo', oficio_id=oficio._id, tecnico=oficio.tecnico) }}"
+                                    class="btn btn-sm btn-info ms-2" title="Ver Anexo" target="_blank">
+                                    <i class="bi bi-eye"></i> Ver
+                                </a>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted">Sin tareas pendientes.</p>
+        {% endif %}
+    </div>
+</div>

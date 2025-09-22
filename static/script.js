@@ -123,6 +123,7 @@ async function fetchNotifications() {
         });
         if (!response.ok) throw new Error('Error fetching notifications: ' + response.status);
         const data = await response.json();
+        console.log('Notifications data:', data);
 
         notificationCount.textContent = data.count || 0;
         notificationList.innerHTML = '';
@@ -177,6 +178,9 @@ async function fetchNotifications() {
         console.error('Error in fetchNotifications:', error);
         if (notificationList) {
             notificationList.innerHTML = '<li class="dropdown-item text-danger">Error al cargar notificaciones</li>';
+        }
+        if (notificationCount) {
+            notificationCount.textContent = '!';
         }
     }
 }
@@ -471,7 +475,10 @@ function filterTable(tableId, fieldId, valueId) {
     });
 }
 
+let currentOficioId = null;
+
 function showInforme(oficioId, numeroOficio, parroquia, canton) {
+    currentOficioId = oficioId;
     fetch('/get_oficio_informe/' + oficioId)
         .then(function(response) { return response.json(); })
         .then(function(data) {
@@ -518,6 +525,12 @@ function showInforme(oficioId, numeroOficio, parroquia, canton) {
             console.error('Error in showInforme:', error);
             document.getElementById('informeContent').innerHTML = '<p class="text-muted">Error al cargar la información.</p>';
         });
+}
+
+function printInforme() {
+    if (currentOficioId) {
+        window.open('/informe_imprimible/' + currentOficioId, '_blank');
+    }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -792,6 +805,7 @@ document.addEventListener('DOMContentLoaded', function () {
     window.addTechnicianPair = addTechnicianPair;
     window.logoutUser = logoutUser;
     window.showInforme = showInforme;
+    window.printInforme = printInforme;
     window.showConfirmModal = showConfirmModal;
     window.filterTable = filterTable;
     window.handleFlashes = handleFlashes;

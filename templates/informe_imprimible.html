@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informe de Actividades - {{ oficio.numero_oficio }}</title>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { margin: 0; }
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.4;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #0066cc;
+            padding-bottom: 20px;
+        }
+        
+        .logo {
+            max-width: 200px;
+            height: auto;
+            margin-bottom: 15px;
+        }
+        
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0066cc;
+            margin: 10px 0;
+        }
+        
+        .oficio-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .oficio-info h3 {
+            margin-top: 0;
+            color: #0066cc;
+        }
+        
+        .info-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            min-width: 120px;
+        }
+        
+        .assignment {
+            border: 1px solid #ddd;
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        
+        .assignment-header {
+            background-color: #e9ecef;
+            padding: 10px;
+            margin: -15px -15px 15px -15px;
+            border-radius: 5px 5px 0 0;
+            font-weight: bold;
+        }
+        
+        .print-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .print-btn:hover {
+            background-color: #0052a3;
+        }
+    </style>
+</head>
+<body>
+    <button class="print-btn no-print" onclick="window.print()">
+        <i class="bi bi-printer"></i> Imprimir
+    </button>
+    
+    <div class="header">
+        <img src="https://conagopareazuay.gob.ec/w30/wp-content/uploads/2023/05/logoConagopare2.png" alt="CONAGOPARE Logo" class="logo">
+        <div class="title">Informe de Actividades</div>
+    </div>
+    
+    <div class="oficio-info">
+        <h3>Información del Oficio</h3>
+        <div class="info-row">
+            <span class="info-label">Oficio:</span>
+            <span>{{ oficio.numero_oficio }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Parroquia:</span>
+            <span>{{ oficio.gad_parroquial }} - Cantón: {{ oficio.canton }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Fecha Enviado:</span>
+            <span>{{ oficio.fecha_enviado_traditional }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Fecha Recibido:</span>
+            <span>{{ oficio.fecha_recibido_traditional }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Detalle:</span>
+            <span>{{ oficio.detalle or 'Sin detalle' }}</span>
+        </div>
+    </div>
+    
+    {% for assignment in assignments %}
+    <div class="assignment">
+        <div class="assignment-header">
+            Técnico: {{ assignment.tecnico_name }}
+        </div>
+        
+        <div class="info-row">
+            <span class="info-label">Tipo Asesoría:</span>
+            <span>{{ assignment.tipo_asesoria }}</span>
+        </div>
+        
+        <div class="info-row">
+            <span class="info-label">Estado:</span>
+            <span>{{ assignment.sub_estado or 'Asignado' }}</span>
+        </div>
+        
+        <div class="info-row">
+            <span class="info-label">Fecha Asesoría:</span>
+            <span>{{ assignment.fecha_asesoria_formatted or 'N/A' }}</span>
+        </div>
+        
+        <div class="info-row">
+            <span class="info-label">Entrega Recepción:</span>
+            <span>{{ assignment.entrega_recepcion or 'No Aplica' }}</span>
+        </div>
+        
+        <div class="info-row">
+            <span class="info-label">Anexo:</span>
+            <span>{{ 'Sí' if assignment.anexo_nombre else 'No' }}</span>
+        </div>
+        
+        <div style="margin-top: 15px;">
+            <div class="info-label">Desarrollo de Actividad:</div>
+            <div style="margin-top: 5px; padding: 10px; background-color: #f8f9fa; border-radius: 3px; min-height: 60px;">
+                {{ assignment.desarrollo_actividad or 'Sin descripción' }}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    
+    {% if not assignments %}
+    <div class="assignment">
+        <div class="assignment-header">Sin Asignaciones</div>
+        <p>Este oficio no tiene técnicos asignados aún.</p>
+    </div>
+    {% endif %}
+</body>
+</html>

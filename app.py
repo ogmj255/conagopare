@@ -14,6 +14,10 @@ from io import BytesIO
 from gridfs import GridFS
 from html import escape
 import json
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import threading
 
 app = Flask(__name__)
 load_dotenv()
@@ -137,6 +141,67 @@ def log_error(error_type, details, username=None, endpoint=None, level='ERROR'):
     except Exception as e:
         print(f"Error logging error: {e}")
 
+def send_email_notification(to_email, subject, message, oficio_data=None):
+    """Send email notification"""
+    def send_async_email():
+        try:
+            smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+            smtp_port = int(os.getenv('SMTP_PORT', '587'))
+            smtp_username = os.getenv('SMTP_USERNAME', '')
+            smtp_password = os.getenv('SMTP_PASSWORD', '')
+            
+            if not smtp_username or not smtp_password:
+                print("SMTP credentials not configured")
+                return False
+            
+            msg = MIMEMultipart()
+            msg['From'] = smtp_username
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            body = f"""
+            <html>
+            <body>
+                <h2>Sistema de Gestión de Oficios - CONAGOPARE</h2>
+                <p>{message}</p>
+                
+                {f'''
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                    <h4>Detalles del Oficio:</h4>
+                    <p><strong>ID:</strong> {oficio_data.get('id_secuencial', 'N/A')}</p>
+                    <p><strong>Número:</strong> {oficio_data.get('numero_oficio', 'N/A')}</p>
+                    <p><strong>Parroquia:</strong> {oficio_data.get('gad_parroquial', 'N/A')}</p>
+                    <p><strong>Cantón:</strong> {oficio_data.get('canton', 'N/A')}</p>
+                    <p><strong>Detalle:</strong> {oficio_data.get('detalle', 'N/A')}</p>
+                </div>
+                ''' if oficio_data else ''}
+                
+                <hr>
+                <p><small>Este es un mensaje automático del Sistema de Gestión de Oficios de CONAGOPARE.</small></p>
+                <p><small>No responda a este correo electronico.<small><p>
+            </body>
+            </html>
+            """
+            
+            msg.attach(MIMEText(body, 'html'))
+            server = smtplib.SMTP(smtp_server, smtp_port)
+            server.starttls()
+            server.login(smtp_username, smtp_password)
+            text = msg.as_string()
+            server.sendmail(smtp_username, to_email, text)
+            server.quit()
+            
+            print(f"Email sent successfully to {to_email}")
+            return True
+            
+        except Exception as e:
+            log_error('EMAIL_ERROR', str(e), None, 'send_email_notification', 'WARNING')
+            print(f"Error sending email: {e}")
+            return False
+    
+    thread = threading.Thread(target=send_async_email)
+    thread.daemon = True
+    thread.start()
+
 def get_tipos_asesoria():
     return [t['nombre'] for t in tipos_asesoria_coll.find()] or ['Asesoría Técnica', 'Inspección', 'Consultoría']
 
@@ -150,7 +215,7 @@ def get_tipos_asesoria_by_tecnico(tecnico_username):
         ]
     }))
     return [t['nombre'] for t in tipos]
-roles_list = ['receiver', 'designer', 'tecnico', 'admin', 'sistemas']
+roles_list = ['receiver', 'designer', 'tecnico', 'admin', 'sistemas', 'coordinacion']
 
 def format_date(iso_date):
     """Formatea una fecha ISO a dd de Mes de aaaa."""
@@ -257,7 +322,8 @@ def index():
             'tecnico': 'tecnico',
             'receiver': 'receive',
             'designer': 'design',
-            'sistemas': 'sistemas'
+            'sistemas': 'sistemas',
+            'coordinacion': 'coordinacion'
         }
         endpoint = role_to_endpoint.get(current_user.role, 'login')
         try:
@@ -271,6 +337,8 @@ def index():
                 return redirect(url_for(endpoint, default_view='asignados'))
             elif current_user.role == 'sistemas':
                 return redirect(url_for(endpoint, default_view='add-product'))
+            elif current_user.role == 'coordinacion':
+                return redirect(url_for(endpoint, current_view='asignados'))
             else:
                 return redirect(url_for(endpoint))
         except BuildError as e:
@@ -349,7 +417,7 @@ def get_notifications():
     if not current_user.is_authenticated:
         return jsonify({'notifications': [], 'count': 0})
     try:
-        user_notifications = list(notifications.find({'user': current_user.username, 'read': False}))
+        user_notifications = list(notifications.find({'user': current_user.username, 'read': False}).sort('timestamp', -1))
         count = len(user_notifications)
         formatted_notifications = [
             {
@@ -363,7 +431,7 @@ def get_notifications():
             } for n in user_notifications
         ]
         return jsonify({'notifications': formatted_notifications, 'count': count})
-    except PyMongoError as e:
+    except Exception as e:
         return jsonify({'notifications': [], 'count': 0, 'error': str(e)})
 
 @app.route('/clear_notifications', methods=['POST'])
@@ -446,7 +514,7 @@ def receive():
     current_view = request.args.get('default_view', 'registrar')
 
     try:
-        parroquias_data = list(parroquias.find())
+        parroquias_data = list(parroquias.find().sort('parroquia', 1))
         if not parroquias_data:
             flash('No se encontraron parroquias en la base de datos. Contácte al administrador.', 'warning')
             print("Advertencia: la colección 'parroquias' está vacía.")
@@ -488,7 +556,7 @@ def receive():
                 assignment['fecha_asesoria_traditional'] = format_date_for_traditional(assignment.get('fecha_asesoria', ''))
             oficio['_id'] = str(oficio['_id'])
 
-        users_list = list(users.find({'role': 'tecnico'}, {'username': 1, 'nombre': 1, 'apellido': 1, '_id': 0}))
+        users_list = list(users.find({}, {'username': 1, 'nombre': 1, 'apellido': 1, 'role': 1, '_id': 0}))
         for user in users_list:
             user['full_name'] = f"{user.get('nombre', '')} {user.get('apellido', '')}".strip() or user['username']
 
@@ -553,7 +621,7 @@ def receive():
                 try:
                     oficios.insert_one(oficio_data)
                     reordenar_ids_secuenciales(year)
-                    designers = users.find({'role': 'designer'})
+                    designers = users.find({'role': {'$in': ['designer', 'admin']}})
                     for designer in designers:
                         notifications.insert_one({
                             'user': designer['username'],
@@ -565,6 +633,19 @@ def receive():
                             'timestamp': datetime.now().isoformat(),
                             'read': False
                         })
+                        if designer.get('email'):
+                            send_email_notification(
+                                designer['email'],
+                                f'Nuevo Oficio Requiere Designación - {id_secuencial}',
+                                f'Se ha registrado un nuevo oficio de {gad_parroquial} ({canton}) que requiere designación de técnico.',
+                                {
+                                    'id_secuencial': id_secuencial,
+                                    'numero_oficio': numero_oficio,
+                                    'gad_parroquial': gad_parroquial,
+                                    'canton': canton,
+                                    'detalle': detalle
+                                }
+                            )
                     flash('Oficio registrado exitosamente.', 'success')
                 except PyMongoError as e:
                     flash(f'Error de base de datos al registrar oficio: {str(e)}', 'error')
@@ -652,16 +733,124 @@ def receive():
                     flash(f'Error de base de datos al eliminar oficio: {str(e)}', 'error')
                 return redirect(url_for('receive', current_view='historial'))
 
+            elif 'actualizar' in request.form or 'entregar' in request.form:
+                oficio_id = request.form.get('oficio_id')
+                numero_oficio = escape(request.form.get('numero_oficio', ''))
+                sub_estado = escape(request.form.get('sub_estado', ''))
+                desarrollo_actividad = escape(request.form.get('desarrollo_actividad', ''))
+                fecha_asesoria = escape(request.form.get('fecha_asesoria', ''))
+                entrega_recepcion = escape(request.form.get('entrega_recepcion', 'No Aplica'))
+                oficio_delegacion = escape(request.form.get('oficio_delegacion', '')) if entrega_recepcion == 'Aplica' else ''
+                acta_entrega = escape(request.form.get('acta_entrega', '')) if entrega_recepcion == 'Aplica' else ''
+
+                update_data = {
+                    'sub_estado': sub_estado,
+                    'desarrollo_actividad': desarrollo_actividad,
+                    'fecha_asesoria': fecha_asesoria,
+                    'entrega_recepcion': entrega_recepcion,
+                    'oficio_delegacion': oficio_delegacion,
+                    'acta_entrega': acta_entrega
+                }
+
+                anexo = request.files.get('anexo')
+                if anexo and anexo.filename:
+                    anexo_nombre = secure_filename(anexo.filename)
+                    anexo_id = fs.put(anexo, filename=anexo_nombre)
+                    update_data['anexo_nombre'] = anexo_nombre
+                    update_data['anexo_id'] = anexo_id
+                    
+                update_set = {
+                    'assignments.$.sub_estado': update_data['sub_estado'],
+                    'assignments.$.desarrollo_actividad': update_data['desarrollo_actividad'],
+                    'assignments.$.fecha_asesoria': update_data['fecha_asesoria'],
+                    'assignments.$.entrega_recepcion': update_data['entrega_recepcion'],
+                    'assignments.$.oficio_delegacion': update_data['oficio_delegacion'],
+                    'assignments.$.acta_entrega': update_data['acta_entrega']
+                }
+                
+                if 'anexo_nombre' in update_data:
+                    update_set['assignments.$.anexo_nombre'] = update_data['anexo_nombre']
+                    update_set['assignments.$.anexo_id'] = update_data['anexo_id']
+                
+                if 'entregar' in request.form and request.form.get('entregar') == '1':
+                    if sub_estado == 'Concluido':
+                        oficio_data = oficios.find_one({'_id': ObjectId(oficio_id)})
+                        if oficio_data:
+                            all_concluded = True
+                            for assignment in oficio_data.get('assignments', []):
+                                if assignment['tecnico'] == current_user.username:
+                                    continue
+                                if assignment.get('sub_estado') != 'Concluido':
+                                    all_concluded = False
+                                    break
+                            if all_concluded:
+                                update_set['estado'] = 'completado'
+                    else:
+                        flash('Debe marcar como Concluido antes de entregar', 'error')
+                        return redirect(url_for('receive', current_view='tecnico'))
+                
+                try:
+                    result = oficios.update_one(
+                        {'_id': ObjectId(oficio_id), 'assignments.tecnico': current_user.username},
+                        {'$set': update_set}
+                    )
+                    
+                    if result.matched_count > 0:
+                        if 'entregar' in request.form and request.form.get('entregar') == '1':
+                            flash('Entregado correctamente', 'success')
+                        else:
+                            flash('Actualizado correctamente', 'success')
+                    else:
+                        flash('No se encontró el oficio', 'error')
+                except Exception as e:
+                    flash('Error al actualizar', 'error')
+
+                return redirect(url_for('receive', current_view='tecnico'))
+        asignados = []
+        completados = []
+        
+        for oficio in oficios.find({'estado': {'$in': ['designado', 'completado']}}).sort('fecha_designacion', -1):
+            for assignment in oficio.get('assignments', []):
+                if assignment['tecnico'] == current_user.username:
+                    assignment_data = {
+                        '_id': str(oficio['_id']),
+                        'id_secuencial': oficio['id_secuencial'],
+                        'numero_oficio': oficio['numero_oficio'],
+                        'gad_parroquial': oficio['gad_parroquial'],
+                        'canton': oficio['canton'],
+                        'detalle': oficio['detalle'],
+                        'tipo_asesoria': assignment['tipo_asesoria'],
+                        'fecha_designacion_formatted': format_date_for_traditional(oficio.get('fecha_designacion', '')),
+                        'sub_estado': assignment.get('sub_estado', 'Asignado'),
+                        'desarrollo_actividad': assignment.get('desarrollo_actividad', ''),
+                        'fecha_asesoria': assignment.get('fecha_asesoria', ''),
+                        'fecha_asesoria_traditional': format_date_for_traditional(assignment.get('fecha_asesoria', '')),
+                        'entrega_recepcion': assignment.get('entrega_recepcion', 'No Aplica'),
+                        'oficio_delegacion': assignment.get('oficio_delegacion', ''),
+                        'acta_entrega': assignment.get('acta_entrega', ''),
+                        'archivo_nombre': oficio.get('archivo_nombre', ''),
+                        'anexo_nombre': assignment.get('anexo_nombre', '')
+                    }
+                    if assignment.get('sub_estado') == 'Concluido':
+                        completados.append(assignment_data)
+                    else:
+                        asignados.append(assignment_data)
+
+        completados = sorted(completados, key=lambda x: x['fecha_asesoria'] or '9999-12-31', reverse=True)
+
         return render_template('receive.html',
                                parroquias=parroquias_data,
                                historial=historial,
                                oficios=oficios_list,
                                users=users_list,
+                               asignados=asignados,
+                               completados=completados,
                                tipos_asesoria=get_tipos_asesoria(),
                                tipos_asesoria_full=list(tipos_asesoria_coll.find()),
                                current_view=current_view)
 
     except PyMongoError as e:
+        log_error('DATABASE_ERROR', str(e), current_user.username if current_user.is_authenticated else None, 'receive', 'ERROR')
         flash(f'Error de base de datos: {str(e)}', 'error')
         print(f"Error in receive: {str(e)}")
         return render_template('receive.html',
@@ -672,6 +861,7 @@ def receive():
                                tipos_asesoria=get_tipos_asesoria(),
                                current_view=current_view)
     except Exception as e:
+        log_error('UNEXPECTED_ERROR', str(e), current_user.username if current_user.is_authenticated else None, 'receive', 'CRITICAL')
         flash(f'Error inesperado: {str(e)}', 'error')
         print(f"Unexpected error in receive: {str(e)}")
         return render_template('receive.html',
@@ -685,11 +875,11 @@ def receive():
 @app.route('/seguimiento', methods=['GET'])
 @login_required
 def seguimiento():
-    if current_user.role not in ['receiver', 'admin', 'designer', 'tecnico']:
+    if current_user.role not in ['receiver', 'admin', 'designer', 'tecnico', 'coordinacion']:
         return redirect(url_for('login'))
     try:
         oficios_list = list(oficios.find().sort('fecha_recibido', -1))
-        users_list = list(users.find({'role': 'tecnico'}, {'username': 1, 'nombre': 1, 'apellido': 1, '_id': 0}))
+        users_list = list(users.find({}, {'username': 1, 'nombre': 1, 'apellido': 1, 'role': 1, '_id': 0}))
         for user in users_list:
             user['full_name'] = f"{user.get('nombre', '')} {user.get('apellido', '')}".strip() or user['username']
         
@@ -709,7 +899,9 @@ def seguimiento():
                     if isinstance(value, ObjectId):
                         assignment[key] = str(value)
                 assignment['fecha_asesoria_traditional'] = format_date_for_traditional(assignment.get('fecha_asesoria', ''))
+                assignment['fecha_asesoria_formatted'] = format_date(assignment.get('fecha_asesoria', ''))
             oficio['assignments'] = assignments
+            oficio['_id'] = str(oficio['_id'])
 
         return render_template('seguimiento.html',
                                oficios=oficios_list,
@@ -772,7 +964,7 @@ def design():
             oficio['assignments'] = assignments
             oficio['_id'] = str(oficio['_id'])
 
-        users_list = list(users.find({'role': 'tecnico'}, {'username': 1, 'nombre': 1, 'apellido': 1, '_id': 0}))
+        users_list = list(users.find({}, {'username': 1, 'nombre': 1, 'apellido': 1, 'role': 1, '_id': 0}))
         for user in users_list:
             user['full_name'] = f"{user.get('nombre', '')} {user.get('apellido', '')}".strip() or user['username']
 
@@ -826,6 +1018,19 @@ def design():
                             'timestamp': datetime.now().isoformat(),
                             'read': False
                         })
+                        if user_data and user_data.get('email'):
+                            send_email_notification(
+                                user_data['email'],
+                                f'Nueva Asignación de {assignment["tipo_asesoria"]} - {oficio_id_secuencial}',
+                                f'Se le ha asignado una nueva tarea de {assignment["tipo_asesoria"]} para {oficio_data.get("gad_parroquial", "")}.',
+                                {
+                                    'id_secuencial': oficio_id_secuencial,
+                                    'numero_oficio': oficio_data.get('numero_oficio', ''),
+                                    'gad_parroquial': oficio_data.get('gad_parroquial', ''),
+                                    'canton': oficio_data.get('canton', ''),
+                                    'detalle': oficio_data.get('detalle', '')
+                                }
+                            )
                     flash('Técnico asignado exitosamente.', 'success')
                 except PyMongoError as e:
                     flash(f'Error de base de datos al asignar técnico: {str(e)}', 'danger')
@@ -924,6 +1129,80 @@ def design():
                     flash(f'Error de base de datos al eliminar oficio: {str(e)}', 'danger')
                 return redirect(url_for('design', current_view='designados'))
 
+            elif 'actualizar' in request.form or 'entregar' in request.form:
+                oficio_id = request.form.get('oficio_id')
+                numero_oficio = escape(request.form.get('numero_oficio', ''))
+                sub_estado = escape(request.form.get('sub_estado', ''))
+                desarrollo_actividad = escape(request.form.get('desarrollo_actividad', ''))
+                fecha_asesoria = escape(request.form.get('fecha_asesoria', ''))
+                entrega_recepcion = escape(request.form.get('entrega_recepcion', 'No Aplica'))
+                oficio_delegacion = escape(request.form.get('oficio_delegacion', '')) if entrega_recepcion == 'Aplica' else ''
+                acta_entrega = escape(request.form.get('acta_entrega', '')) if entrega_recepcion == 'Aplica' else ''
+
+                update_data = {
+                    'sub_estado': sub_estado,
+                    'desarrollo_actividad': desarrollo_actividad,
+                    'fecha_asesoria': fecha_asesoria,
+                    'entrega_recepcion': entrega_recepcion,
+                    'oficio_delegacion': oficio_delegacion,
+                    'acta_entrega': acta_entrega
+                }
+
+                anexo = request.files.get('anexo')
+                if anexo and anexo.filename:
+                    anexo_nombre = secure_filename(anexo.filename)
+                    anexo_id = fs.put(anexo, filename=anexo_nombre)
+                    update_data['anexo_nombre'] = anexo_nombre
+                    update_data['anexo_id'] = anexo_id
+                    
+                update_set = {
+                    'assignments.$.sub_estado': update_data['sub_estado'],
+                    'assignments.$.desarrollo_actividad': update_data['desarrollo_actividad'],
+                    'assignments.$.fecha_asesoria': update_data['fecha_asesoria'],
+                    'assignments.$.entrega_recepcion': update_data['entrega_recepcion'],
+                    'assignments.$.oficio_delegacion': update_data['oficio_delegacion'],
+                    'assignments.$.acta_entrega': update_data['acta_entrega']
+                }
+                
+                if 'anexo_nombre' in update_data:
+                    update_set['assignments.$.anexo_nombre'] = update_data['anexo_nombre']
+                    update_set['assignments.$.anexo_id'] = update_data['anexo_id']
+                
+                if 'entregar' in request.form and request.form.get('entregar') == '1':
+                    if sub_estado == 'Concluido':
+                        oficio_data = oficios.find_one({'_id': ObjectId(oficio_id)})
+                        if oficio_data:
+                            all_concluded = True
+                            for assignment in oficio_data.get('assignments', []):
+                                if assignment['tecnico'] == current_user.username:
+                                    continue
+                                if assignment.get('sub_estado') != 'Concluido':
+                                    all_concluded = False
+                                    break
+                            if all_concluded:
+                                update_set['estado'] = 'completado'
+                    else:
+                        flash('Debe marcar como Concluido antes de entregar', 'error')
+                        return redirect(url_for('design', current_view='tecnico'))
+                
+                try:
+                    result = oficios.update_one(
+                        {'_id': ObjectId(oficio_id), 'assignments.tecnico': current_user.username},
+                        {'$set': update_set}
+                    )
+                    
+                    if result.matched_count > 0:
+                        if 'entregar' in request.form and request.form.get('entregar') == '1':
+                            flash('Entregado correctamente', 'success')
+                        else:
+                            flash('Actualizado correctamente', 'success')
+                    else:
+                        flash('No se encontró el oficio', 'error')
+                except Exception as e:
+                    flash('Error al actualizar', 'error')
+
+                return redirect(url_for('design', current_view='tecnico'))
+
         all_oficios = list(oficios.find().sort('id_secuencial', 1))
         for oficio in all_oficios:
             oficio['fecha_enviado_traditional'] = format_date_for_traditional(oficio.get('fecha_enviado', ''))
@@ -942,6 +1221,37 @@ def design():
                 assignment['fecha_asesoria_formatted'] = format_date_for_traditional(assignment.get('fecha_asesoria', ''))
             oficio['assignments'] = assignments
             oficio['_id'] = str(oficio['_id'])
+        asignados_tecnico = []
+        completados_tecnico = []
+        
+        for oficio in oficios.find({'estado': {'$in': ['designado', 'completado']}}).sort('fecha_designacion', -1):
+            for assignment in oficio.get('assignments', []):
+                if assignment['tecnico'] == current_user.username:
+                    assignment_data = {
+                        '_id': str(oficio['_id']),
+                        'id_secuencial': oficio['id_secuencial'],
+                        'numero_oficio': oficio['numero_oficio'],
+                        'gad_parroquial': oficio['gad_parroquial'],
+                        'canton': oficio['canton'],
+                        'detalle': oficio['detalle'],
+                        'tipo_asesoria': assignment['tipo_asesoria'],
+                        'fecha_designacion_formatted': format_date_for_traditional(oficio.get('fecha_designacion', '')),
+                        'sub_estado': assignment.get('sub_estado', 'Asignado'),
+                        'desarrollo_actividad': assignment.get('desarrollo_actividad', ''),
+                        'fecha_asesoria': assignment.get('fecha_asesoria', ''),
+                        'fecha_asesoria_traditional': format_date_for_traditional(assignment.get('fecha_asesoria', '')),
+                        'entrega_recepcion': assignment.get('entrega_recepcion', 'No Aplica'),
+                        'oficio_delegacion': assignment.get('oficio_delegacion', ''),
+                        'acta_entrega': assignment.get('acta_entrega', ''),
+                        'archivo_nombre': oficio.get('archivo_nombre', ''),
+                        'anexo_nombre': assignment.get('anexo_nombre', '')
+                    }
+                    if assignment.get('sub_estado') == 'Concluido':
+                        completados_tecnico.append(assignment_data)
+                    else:
+                        asignados_tecnico.append(assignment_data)
+
+        completados_tecnico = sorted(completados_tecnico, key=lambda x: x['fecha_asesoria'] or '9999-12-31', reverse=True)
 
         return render_template('design.html',
                                pendientes=pendientes,
@@ -949,12 +1259,15 @@ def design():
                                completados=completados,
                                oficios=all_oficios,
                                users=users_list,
+                               asignados=asignados_tecnico,
+                               completados_tecnico=completados_tecnico,
                                tipos_asesoria=get_tipos_asesoria(),
                                tipos_asesoria_full=list(tipos_asesoria_coll.find()),
                                parroquias=list(parroquias.find()),
                                current_view=current_view)
 
     except PyMongoError as e:
+        log_error('DATABASE_ERROR', str(e), current_user.username if current_user.is_authenticated else None, 'design', 'ERROR')
         flash(f'Error de base de datos: {str(e)}', 'danger')
         print(f"Error in design: {str(e)}")
         return render_template('design.html',
@@ -967,6 +1280,7 @@ def design():
                                parroquias=[],
                                current_view=current_view)
     except Exception as e:
+        log_error('UNEXPECTED_ERROR', str(e), current_user.username if current_user.is_authenticated else None, 'design', 'CRITICAL')
         flash(f'Error inesperado: {str(e)}', 'danger')
         print(f"Unexpected error in design: {str(e)}")
         return render_template('design.html',
@@ -1051,6 +1365,43 @@ def tecnico():
                     )
                     
                     if result.matched_count > 0:
+                        oficio_data = oficios.find_one({'_id': ObjectId(oficio_id)})
+                        user_data = users.find_one({'username': current_user.username})
+                        user_name = f"{user_data.get('nombre', '')} {user_data.get('apellido', '')}".strip() if user_data else current_user.username
+                        
+                        # Enviar notificaciones a receive
+                        designers = users.find({'role': 'designer'})
+                        for designer in designers:
+                            if designer.get('email'):
+                                if 'entregar' in request.form and request.form.get('entregar') == '1':
+                                    send_email_notification(
+                                        designer['email'],
+                                        f'Oficio Entregado por Técnico - {oficio_data.get("id_secuencial", "")}',
+                                        f'El técnico {user_name} ha entregado el oficio de {oficio_data.get("gad_parroquial", "")} ({oficio_data.get("canton", "")}) con estado: {sub_estado}.',
+                                        {
+                                            'id_secuencial': oficio_data.get('id_secuencial', ''),
+                                            'numero_oficio': oficio_data.get('numero_oficio', ''),
+                                            'gad_parroquial': oficio_data.get('gad_parroquial', ''),
+                                            'canton': oficio_data.get('canton', ''),
+                                            'detalle': f'Técnico: {user_name} | Estado: {sub_estado}'
+                                        }
+                                        
+                                    )
+                                else:
+                                    # Notificación de actualización
+                                    send_email_notification(
+                                        designer['email'],
+                                        f'Actualización de Técnico - {oficio_data.get("id_secuencial", "")}',
+                                        f'El técnico {user_name} ha actualizado el oficio de {oficio_data.get("gad_parroquial", "")} ({oficio_data.get("canton", "")}) con estado: {sub_estado}.',
+                                        {
+                                            'id_secuencial': oficio_data.get('id_secuencial', ''),
+                                            'numero_oficio': oficio_data.get('numero_oficio', ''),
+                                            'gad_parroquial': oficio_data.get('gad_parroquial', ''),
+                                            'canton': oficio_data.get('canton', ''),
+                                            'detalle': f'Técnico: {user_name} | Estado: {sub_estado} | Desarrollo: {desarrollo_actividad[:100]}...'
+                                        }
+                                    )
+                        
                         if 'entregar' in request.form and request.form.get('entregar') == '1':
                             flash('Entregado correctamente', 'success')
                         else:
@@ -1132,18 +1483,59 @@ def download_anexo(oficio_id, tecnico):
         if not anexo_nombre or not anexo_id:
             return "Anexo not found for this tecnico", 404
         anexo_file = fs.get(anexo_id)
-        return send_file(
-            BytesIO(anexo_file.read()),
-            mimetype='application/octet-stream',
-            as_attachment=True,
-            download_name=anexo_nombre
-        )
+        file_data = anexo_file.read()
+        
+        if anexo_nombre.lower().endswith('.pdf'):
+            content_type = 'application/pdf'
+            disposition = 'inline'
+        else:
+            content_type = 'application/octet-stream'
+            disposition = 'attachment'
+        
+        response = make_response(file_data)
+        response.headers['Content-Type'] = content_type
+        response.headers['Content-Disposition'] = f'{disposition}; filename="{anexo_nombre}"'
+        return response
     except PyMongoError as e:
         return f"Error de base de datos: {str(e)}", 500
     except Exception as e:
         return f"Error retrieving anexo: {str(e)}", 500
 
-@app.route('/download_anexo/<oficio_id>/<int:assignment_index>')
+@app.route('/preview_anexo/<oficio_id>/<int:assignment_index>')
+@login_required
+def preview_anexo(oficio_id, assignment_index):
+    try:
+        if not ObjectId.is_valid(oficio_id):
+            return "Invalid oficio ID", 400
+        oficio = oficios.find_one({'_id': ObjectId(oficio_id)})
+        if not oficio:
+            return "Oficio not found", 404
+        assignments = oficio.get('assignments', [])
+        if assignment_index >= len(assignments):
+            return "Assignment index out of range", 404
+        assignment = assignments[assignment_index]
+        if not assignment.get('anexo_id') or not assignment.get('anexo_nombre'):
+            return "Anexo not found for this assignment", 404
+        anexo_file = fs.get(assignment['anexo_id'])
+        file_data = anexo_file.read()
+        anexo_nombre = assignment['anexo_nombre']
+        if anexo_nombre.lower().endswith('.pdf'):
+            content_type = 'application/pdf'
+            disposition = 'inline'
+        else:
+            content_type = 'application/octet-stream'
+            disposition = 'attachment'
+        
+        response = make_response(file_data)
+        response.headers['Content-Type'] = content_type
+        response.headers['Content-Disposition'] = f'{disposition}; filename="{anexo_nombre}"'
+        return response
+    except PyMongoError as e:
+        return f"Error de base de datos: {str(e)}", 500
+    except Exception as e:
+        return f"Error retrieving anexo: {str(e)}", 500
+
+@app.route('/download_anexo_by_index/<oficio_id>/<int:assignment_index>')
 @login_required
 def download_anexo_by_index(oficio_id, assignment_index):
     try:
@@ -1159,12 +1551,13 @@ def download_anexo_by_index(oficio_id, assignment_index):
         if not assignment.get('anexo_id') or not assignment.get('anexo_nombre'):
             return "Anexo not found for this assignment", 404
         anexo_file = fs.get(assignment['anexo_id'])
-        return send_file(
-            BytesIO(anexo_file.read()),
-            mimetype='application/octet-stream',
-            as_attachment=True,
-            download_name=assignment['anexo_nombre']
-        )
+        file_data = anexo_file.read()
+        anexo_nombre = assignment['anexo_nombre']
+        
+        response = make_response(file_data)
+        response.headers['Content-Type'] = 'application/octet-stream'
+        response.headers['Content-Disposition'] = f'attachment; filename="{anexo_nombre}"'
+        return response
     except PyMongoError as e:
         return f"Error de base de datos: {str(e)}", 500
     except Exception as e:
@@ -1189,7 +1582,8 @@ def admin():
                         'apellido': escape(request.form['apellido']),
                         'username': username,
                         'password': hashed_password,
-                        'role': request.form['role']
+                        'role': request.form['role'],
+                        'email': escape(request.form.get('email', ''))
                     })
                     flash('Usuario creado exitosamente', 'success')
                 except PyMongoError as e:
@@ -1204,7 +1598,8 @@ def admin():
                     'nombre': escape(request.form['nombre']),
                     'apellido': escape(request.form['apellido']),
                     'username': escape(request.form['username']),
-                    'role': request.form['role']
+                    'role': request.form['role'],
+                    'email': escape(request.form.get('email', ''))
                 }
                 if request.form['password']:
                     password = request.form['password'].encode('utf-8')
@@ -1482,7 +1877,7 @@ def admin():
                 assignment['fecha_asesoria_traditional'] = format_date_for_traditional(assignment.get('fecha_asesoria', ''))
             oficio['assignments'] = assignments
 
-        users_list = list(users.find({'role': 'tecnico'}, {'username': 1, 'nombre': 1, 'apellido': 1, '_id': 0}))
+        users_list = list(users.find({}, {'username': 1, 'nombre': 1, 'apellido': 1, 'role': 1, '_id': 0}))
         for user in users_list:
             user['full_name'] = f"{user.get('nombre', '')} {user.get('apellido', '')}".strip() or user['username']
 
@@ -1804,7 +2199,7 @@ def get_oficio_informe(oficio_id):
         if not oficio or not oficio.get('assignments'):
             return jsonify({'success': False, 'error': 'Oficio not found or no assignments'})
         
-        users_list = list(users.find({'role': 'tecnico'}, {'username': 1, 'nombre': 1, 'apellido': 1, '_id': 0}))
+        users_list = list(users.find({}, {'username': 1, 'nombre': 1, 'apellido': 1, '_id': 0}))
         user_lookup = {user['username']: f"{user.get('nombre', '')} {user.get('apellido', '')}".strip() or user['username'] for user in users_list}
         
         assignments_data = []
@@ -1828,7 +2223,215 @@ def get_oficio_informe(oficio_id):
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/informe_imprimible/<oficio_id>')
+@login_required
+def informe_imprimible(oficio_id):
+    try:
+        if not ObjectId.is_valid(oficio_id):
+            flash('ID de oficio inválido', 'error')
+            return redirect(url_for('index'))
+        
+        oficio = oficios.find_one({'_id': ObjectId(oficio_id)})
+        if not oficio:
+            flash('Oficio no encontrado', 'error')
+            return redirect(url_for('index'))
+        
+        users_list = list(users.find({}, {'username': 1, 'nombre': 1, 'apellido': 1, '_id': 0}))
+        user_lookup = {user['username']: f"{user.get('nombre', '')} {user.get('apellido', '')}".strip() or user['username'] for user in users_list}
+        
+        oficio['fecha_enviado_traditional'] = format_date_for_traditional(oficio.get('fecha_enviado', ''))
+        oficio['fecha_recibido_traditional'] = format_date_for_traditional(oficio.get('fecha_recibido', ''))
+        
+        assignments = oficio.get('assignments', [])
+        for assignment in assignments:
+            assignment['tecnico_name'] = user_lookup.get(assignment['tecnico'], assignment['tecnico'])
+            assignment['fecha_asesoria_formatted'] = format_date_for_traditional(assignment.get('fecha_asesoria', ''))
+        
+        return render_template('informe_imprimible.html', oficio=oficio, assignments=assignments)
+    except Exception as e:
+        flash(f'Error al generar informe: {str(e)}', 'error')
+        return redirect(url_for('index'))
     
 
+@app.route('/coordinacion', methods=['GET', 'POST'])
+@login_required
+def coordinacion():
+    if current_user.role not in ['coordinacion', 'admin']:
+        return redirect(url_for('login'))
+    current_view = request.args.get('current_view', 'asignados')
+    try:
+        if request.method == 'POST':
+            if 'actualizar' in request.form or 'entregar' in request.form:
+                oficio_id = request.form.get('oficio_id')
+                sub_estado = escape(request.form.get('sub_estado', ''))
+                desarrollo_actividad = escape(request.form.get('desarrollo_actividad', ''))
+                fecha_asesoria = escape(request.form.get('fecha_asesoria', ''))
+                entrega_recepcion = escape(request.form.get('entrega_recepcion', 'No Aplica'))
+                oficio_delegacion = escape(request.form.get('oficio_delegacion', '')) if entrega_recepcion == 'Aplica' else ''
+                acta_entrega = escape(request.form.get('acta_entrega', '')) if entrega_recepcion == 'Aplica' else ''
+
+                update_data = {
+                    'sub_estado': sub_estado,
+                    'desarrollo_actividad': desarrollo_actividad,
+                    'fecha_asesoria': fecha_asesoria,
+                    'entrega_recepcion': entrega_recepcion,
+                    'oficio_delegacion': oficio_delegacion,
+                    'acta_entrega': acta_entrega
+                }
+
+                anexo = request.files.get('anexo')
+                if anexo and anexo.filename:
+                    anexo_nombre = secure_filename(anexo.filename)
+                    anexo_id = fs.put(anexo, filename=anexo_nombre)
+                    update_data['anexo_nombre'] = anexo_nombre
+                    update_data['anexo_id'] = anexo_id
+                    
+                update_set = {
+                    'assignments.$.sub_estado': update_data['sub_estado'],
+                    'assignments.$.desarrollo_actividad': update_data['desarrollo_actividad'],
+                    'assignments.$.fecha_asesoria': update_data['fecha_asesoria'],
+                    'assignments.$.entrega_recepcion': update_data['entrega_recepcion'],
+                    'assignments.$.oficio_delegacion': update_data['oficio_delegacion'],
+                    'assignments.$.acta_entrega': update_data['acta_entrega']
+                }
+                
+                if 'anexo_nombre' in update_data:
+                    update_set['assignments.$.anexo_nombre'] = update_data['anexo_nombre']
+                    update_set['assignments.$.anexo_id'] = update_data['anexo_id']
+                
+                if 'entregar' in request.form and request.form.get('entregar') == '1':
+                    if sub_estado == 'Concluido':
+                        oficio_data = oficios.find_one({'_id': ObjectId(oficio_id)})
+                        if oficio_data:
+                            all_concluded = True
+                            for assignment in oficio_data.get('assignments', []):
+                                if assignment['tecnico'] == current_user.username:
+                                    continue
+                                if assignment.get('sub_estado') != 'Concluido':
+                                    all_concluded = False
+                                    break
+                            if all_concluded:
+                                update_set['estado'] = 'completado'
+                    else:
+                        flash('Debe marcar como Concluido antes de entregar', 'error')
+                        return redirect(url_for('coordinacion', current_view=current_view))
+                
+                try:
+                    result = oficios.update_one(
+                        {'_id': ObjectId(oficio_id), 'assignments.tecnico': current_user.username},
+                        {'$set': update_set}
+                    )
+                    
+                    if result.matched_count > 0:
+                        oficio_data = oficios.find_one({'_id': ObjectId(oficio_id)})
+                        user_data = users.find_one({'username': current_user.username})
+                        user_name = f"{user_data.get('nombre', '')} {user_data.get('apellido', '')}".strip() if user_data else current_user.username
+                        
+                        if 'entregar' in request.form and request.form.get('entregar') == '1':
+                            designers = users.find({'role': 'designer'})
+                            for designer in designers:
+                                if designer.get('email'):
+                                    send_email_notification(
+                                        designer['email'],
+                                        f'Oficio Entregado por Coordinación - {oficio_data.get("id_secuencial", "")}',
+                                        f'El coordinador {user_name} ha entregado el oficio de {oficio_data.get("gad_parroquial", "")} ({oficio_data.get("canton", "")}) con estado: {sub_estado}.',
+                                        {
+                                            'id_secuencial': oficio_data.get('id_secuencial', ''),
+                                            'numero_oficio': oficio_data.get('numero_oficio', ''),
+                                            'gad_parroquial': oficio_data.get('gad_parroquial', ''),
+                                            'canton': oficio_data.get('canton', ''),
+                                            'detalle': f'Coordinador: {user_name} | Estado: {sub_estado}'
+                                        }
+                                    )
+                        
+                        if 'entregar' in request.form and request.form.get('entregar') == '1':
+                            flash('Entregado correctamente', 'success')
+                        else:
+                            flash('Actualizado correctamente', 'success')
+                    else:
+                        flash('No se encontró el oficio', 'error')
+                except Exception as e:
+                    flash('Error al actualizar', 'error')
+
+                return redirect(url_for('coordinacion', current_view=current_view))
+        asignados = []
+        completados = []
+        
+        for oficio in oficios.find({'estado': {'$in': ['designado', 'completado']}}).sort('fecha_designacion', -1):
+            for assignment in oficio.get('assignments', []):
+                if assignment['tecnico'] == current_user.username:
+                    assignment_data = {
+                        '_id': str(oficio['_id']),
+                        'id_secuencial': oficio['id_secuencial'],
+                        'numero_oficio': oficio['numero_oficio'],
+                        'gad_parroquial': oficio['gad_parroquial'],
+                        'canton': oficio['canton'],
+                        'detalle': oficio['detalle'],
+                        'tipo_asesoria': assignment['tipo_asesoria'],
+                        'tecnico': assignment['tecnico'],
+                        'fecha_designacion': oficio.get('fecha_designacion', ''),
+                        'fecha_designacion_formatted': format_date_for_traditional(oficio.get('fecha_designacion', '')),
+                        'sub_estado': assignment.get('sub_estado', 'Asignado'),
+                        'desarrollo_actividad': assignment.get('desarrollo_actividad', ''),
+                        'fecha_asesoria': assignment.get('fecha_asesoria', ''),
+                        'fecha_asesoria_traditional': format_date_for_traditional(assignment.get('fecha_asesoria', '')),
+                        'entrega_recepcion': assignment.get('entrega_recepcion', 'No Aplica'),
+                        'oficio_delegacion': assignment.get('oficio_delegacion', ''),
+                        'acta_entrega': assignment.get('acta_entrega', ''),
+                        'archivo_nombre': oficio.get('archivo_nombre', ''),
+                        'anexo_nombre': assignment.get('anexo_nombre', '')
+                    }
+                    if assignment.get('sub_estado') == 'Concluido':
+                        completados.append(assignment_data)
+                    else:
+                        asignados.append(assignment_data)
+        users_list = list(users.find({}, {'username': 1, 'nombre': 1, 'apellido': 1, 'role': 1, '_id': 0}))
+        for user in users_list:
+            user['full_name'] = f"{user.get('nombre', '')} {user.get('apellido', '')}".strip() or user['username']
+        user_lookup = {user['username']: user['full_name'] for user in users_list}
+        
+        # Agregar nombres de técnicos a las asignaciones
+        for assignment_data in asignados + completados:
+            assignment_data['tecnico_name'] = user_lookup.get(assignment_data['tecnico'], assignment_data['tecnico'])
+        
+        oficios_list = list(oficios.find().sort('id_secuencial', 1))
+        
+        for oficio in oficios_list:
+            oficio['fecha_enviado_traditional'] = format_date_for_traditional(oficio.get('fecha_enviado', ''))
+            oficio['fecha_recibido_traditional'] = format_date_for_traditional(oficio.get('fecha_recibido', ''))
+            oficio['fecha_designacion_formatted'] = format_date_for_traditional(oficio.get('fecha_designacion', ''))
+            assignments = oficio.get('assignments', [])
+            for assignment in assignments:
+                if 'anexo_datos' in assignment:
+                    del assignment['anexo_datos']
+                if 'archivo_datos' in assignment:
+                    del assignment['archivo_datos']
+                for key, value in assignment.items():
+                    if isinstance(value, ObjectId):
+                        assignment[key] = str(value)
+                assignment['fecha_asesoria_formatted'] = format_date(assignment.get('fecha_asesoria', ''))
+                assignment['fecha_asesoria_traditional'] = format_date_for_traditional(assignment.get('fecha_asesoria', ''))
+                assignment['tecnico_name'] = user_lookup.get(assignment['tecnico'], assignment['tecnico'])
+            oficio['assignments'] = assignments
+            oficio['_id'] = str(oficio['_id'])
+
+        completados = sorted(completados, key=lambda x: x['fecha_asesoria_traditional'] or '9999-12-31', reverse=True)
+
+        return render_template('coordinacion.html',
+                               asignados=asignados,
+                               completados=completados,
+                               oficios=oficios_list,
+                               users=users_list,
+                               parroquias=list(parroquias.find()),
+                               current_view=current_view)
+    except PyMongoError as e:
+        log_error('DATABASE_ERROR', str(e), current_user.username if current_user.is_authenticated else None, 'coordinacion', 'ERROR')
+        flash(f'Error de base de datos: {str(e)}', 'error')
+        return render_template('coordinacion.html', asignados=[], completados=[], oficios=[], users=[], parroquias=[], current_view=current_view)
+    except Exception as e:
+        log_error('UNEXPECTED_ERROR', str(e), current_user.username if current_user.is_authenticated else None, 'coordinacion', 'CRITICAL')
+        flash(f'Error inesperado: {str(e)}', 'error')
+        return render_template('coordinacion.html', asignados=[], completados=[], oficios=[], users=[], parroquias=[], current_view=current_view)
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)), debug=True)

@@ -4,14 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Designación</title>
+    <title>Panel de Coordinación</title>
     <link rel="icon" type="image/png" href="https://i.postimg.cc/y30hqcg3/45fd5a1a-670a-4ce5-8ac8-dc135faffeb8.png">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 
-<body data-current-view="{{ current_view }}" data-current-role="design">
+<body data-current-view="{{ current_view }}" data-current-role="coordinacion">
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="#">
@@ -25,24 +24,15 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link {{ 'active' if current_view == 'pendientes' else '' }}" id="tab-pendientes" onclick="showPanel('pendientes')"
-                            href="#">Pendientes</a>
+                        <a class="nav-link active" id="tab-asignados" onclick="showPanel('asignados')"
+                            href="#">Asignaciones Pendientes</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {{ 'active' if current_view == 'designados' else '' }}" id="tab-designados" onclick="showPanel('designados')"
-                            href="#">Designados</a>
+                        <a class="nav-link" id="tab-completados" onclick="showPanel('completados')" href="#">Historial
+                            de Tareas Finalizadas</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {{ 'active' if current_view == 'seguimiento' else '' }}" id="tab-seguimiento" onclick="showPanel('seguimiento')"
-                            href="#">Seguimiento</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {{ 'active' if current_view == 'tecnico' else '' }}" id="tab-tecnico" onclick="showPanel('tecnico')"
-                            href="#">Técnico</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {{ 'active' if current_view == 'completados' else '' }}" id="tab-completados" onclick="showPanel('completados')"
-                            href="#">Historial Completados</a>
+                        <a class="nav-link" id="tab-seguimiento" onclick="showPanel('seguimiento')" href="#">Seguimiento</a>
                     </li>
                 </ul>
                 <ul class="navbar-nav">
@@ -89,7 +79,7 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         {% for category, message in messages %}
-        <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible show"
+        <div class="alert alert-{{ 'success' if category == 'success' else 'danger' if category == 'danger' else 'warning' }} alert-dismissible fade show"
             role="alert">
             {{ message }}
         </div>
@@ -98,205 +88,52 @@
         {% endwith %}
 
         <div class="main-container">
-            <!-- Pendientes Panel -->
-            <div id="panel-pendientes" class="fade-panel {{ 'active' if current_view == 'pendientes' else '' }}">
-                <div class="card">
-                    <div class="card-header">
-                        <i class="bi bi-file-earmark-text"></i> Pendientes
-                    </div>
-                    <div class="card-body">
-                        <p class="text-muted">Número de pendientes: {{ pendientes|length }}</p>
-                        {% if pendientes %}
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th style="cursor: pointer;" onclick="sortPendientesById()" title="Click para ordenar">ID <i id="sort-icon-pendientes" class="bi bi-arrow-down-up"></i></th>
-                                        <th>Número Oficio</th>
-                                        <th>Fecha Envío</th>
-                                        <th>GAD Parroquial</th>
-                                        <th>Cantón</th>
-                                        <th>Detalle</th>
-                                        <th>Opciones</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for oficio in pendientes %}
-                                    <tr data-id="{{ oficio.id_secuencial|lower }}"
-                                        data-numero="{{ oficio.numero_oficio|lower }}"
-                                        data-fecha="{{ oficio.fecha_enviado_traditional }}"
-                                        data-oficio-id="{{ oficio._id }}">
-                                        <td>{{ oficio.id_secuencial }}</td>
-                                        <td>{{ oficio.numero_oficio }}</td>
-                                        <td>{{ oficio.fecha_enviado_traditional }}</td>
-                                        <td>{{ oficio.gad_parroquial }}</td>
-                                        <td>{{ oficio.canton }}</td>
-                                        <td>{{ oficio.detalle }}</td>
-                                        <td>
-                                            {% if oficio.archivo_nombre %}
-                                            <button type="button" class="btn btn-sm btn-info preview-btn"
-                                                data-bs-toggle="modal" data-bs-target="#previewModal"
-                                                data-id="{{ oficio._id }}"
-                                                data-archivo-nombre="{{ oficio.archivo_nombre }}">
-                                                <i class="bi bi-eye"></i>
-                                            </button>
-                                            <a href="{{ url_for('download', oficio_id=oficio._id) }}"
-                                                class="btn btn-sm btn-primary">
-                                                <i class="bi bi-download"></i>
-                                            </a>
-                                            {% else %}
-                                            <span class="text-muted">Sin archivo</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal"
-                                                data-bs-target="#designModal" data-id="{{ oficio._id }}"
-                                                data-numero-oficio="{{ oficio.numero_oficio }}">Designar</button>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% else %}
-                        <p class="text-muted">No hay oficios pendientes.</p>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Designados Panel -->
-
-            <!-- Designados Panel -->
-            <div id="panel-designados" class="fade-panel {{ 'active' if current_view == 'designados' else '' }}">
-                <div class="card">
-                    <div class="card-header">
-                        <i class="bi bi-file-earmark-text"></i> Designados
-                    </div>
-                    <div class="card-body">
-                        <p class="text-muted">Número de designaciones: {{ designados|length }}</p>
-                        <div class="mb-4">
-                            <h6>Filtrar Registros</h6>
-                            <div class="row g-2 align-items-end">
-                                <div class="col-md-3">
-                                    <select class="form-select" id="filterField">
-                                        <option value="id">ID Secuencial</option>
-                                        <option value="numero">Número de Oficio</option>
-                                        <option value="tecnico">Técnico Asignado</option>
-                                        <option value="tipo">Tipo de Asesoría</option>
-                                        <option value="fecha">Fecha Designación</option>
-                                        <option value="estado">Estado</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <input type="text" class="form-control" id="filterValue"
-                                        placeholder="Ingrese valor de búsqueda">
-                                    <input type="date" class="form-control d-none" id="filterDateValue"
-                                        placeholder="Seleccione una fecha">
-                                </div>
-                            </div>
-                        </div>
-                        {% if designados %}
-                        <div class="table-responsive">
-                            <table class="table table-hover" id="designadosTable">
-                                <thead>
-                                    <tr>
-                                        <th style="cursor: pointer;" onclick="sortDesignadosById()" title="Click para ordenar">ID <i id="sort-icon-designados" class="bi bi-arrow-down-up"></i></th>
-                                        <th>Número Oficio</th>
-                                        <th>Detalle</th>
-                                        <th>Técnicos / Asignaciones</th>
-                                        <th>Fecha Designación</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for oficio in designados %}
-                                    {% set assignments = oficio.assignments if oficio.assignments else [] %}
-                                    {% set tecnicos_list = [] %}
-                                    {% for assignment in assignments %}
-                                    {% set tecnico_data = users | selectattr('username', 'equalto', assignment.tecnico) | list %}
-                                    {% set tecnico_full_name = tecnico_data[0].full_name if tecnico_data else assignment.tecnico %}
-                                    {% set _ = tecnicos_list.append(tecnico_full_name | lower) %}
-                                    {% endfor %}
-                                    {% set tecnicos_list = tecnicos_list | join(',') %}
-                                    {% set tipos_list = assignments | map(attribute='tipo_asesoria') | map('lower') |
-                                    join(',') %}
-                                    <tr data-id="{{ oficio.id_secuencial|lower }}"
-                                        data-numero="{{ oficio.numero_oficio|lower }}"
-                                        data-tecnicos="{{ tecnicos_list }}" data-tipos="{{ tipos_list }}"
-                                        data-fecha="{{ oficio.fecha_designacion|slice(0, 10) if oficio.fecha_designacion else '' }}"
-                                        data-oficio-id="{{ oficio._id }}"
-                                        data-assignments='{{ assignments | tojson | safe }}'>
-                                        <td>{{ oficio.id_secuencial }}</td>
-                                        <td>{{ oficio.numero_oficio }}</td>
-                                        <td>{{ oficio.detalle }}</td>
-                                        <td class="assignment-cell">
-                                            {% if assignments %}
-                                            {% for assignment in assignments %}
-                                            {% set tecnico_data = users | selectattr('username', 'equalto', assignment.tecnico) | list %}
-                                            {% set tecnico_full_name = tecnico_data[0].full_name if tecnico_data else assignment.tecnico %}
-                                            <div class="assignment-entry">
-                                                <span class="tecnico-name"><strong>{{ tecnico_full_name }}</strong> - </span>
-                                                <span class="tipo-asesoria">{{ assignment.tipo_asesoria }}</span>
-                                            </div><br>
-                                            {% endfor %}
-                                            {% else %}
-                                            <span class="text-muted">Sin asignaciones</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ oficio.fecha_designacion_with_time if oficio.fecha_designacion_with_time else '' }}
-                                        </td>
-                                        <td>
-                                            <button type="button" class="btn btn-sm btn-primary edit-btn"
-                                                data-bs-toggle="modal" data-bs-target="#editModal"
-                                                data-id="{{ oficio._id }}"
-                                                data-fecha-enviado="{{ oficio.fecha_enviado_traditional }}"
-                                                data-numero-oficio="{{ oficio.numero_oficio }}"
-                                                data-gad-parroquial="{{ oficio.gad_parroquial }}"
-                                                data-canton="{{ oficio.canton }}" data-detalle="{{ oficio.detalle }}"
-                                                data-assignments='{{ assignments | tojson | safe }}'>
-                                                <i class="bi bi-pencil-square"></i>
-                                            </button>
-                                            {% if oficio.archivo_nombre %}
-                                            <button type="button" class="btn btn-sm btn-info preview-btn"
-                                                data-bs-toggle="modal" data-bs-target="#previewModal"
-                                                data-id="{{ oficio._id }}"
-                                                data-archivo-nombre="{{ oficio.archivo_nombre }}">
-                                                <i class="bi bi-eye"></i>
-                                            </button>
-                                            <a href="{{ url_for('download', oficio_id=oficio._id) }}"
-                                                class="btn btn-sm btn-primary">
-                                                <i class="bi bi-download"></i>
-                                            </a>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% else %}
-                        <p class="text-muted">Sin tareas designadas.</p>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            <!-- Panel Técnico -->
-            <div id="panel-tecnico" class="fade-panel {{ 'active' if current_view == 'tecnico' else '' }}">
+            <div id="panel-asignados" class="fade-panel active">
                 {% set editable = true %}
-                {% set form_action = 'design' %}
+                {% set form_action = 'coordinacion' %}
                 {% include '_panel_tecnico.html' with context %}
             </div>
 
-            <!-- Panel Historial Completados -->
-            <div id="panel-completados" class="fade-panel {{ 'active' if current_view == 'completados' else '' }}">
-                {% set completados = completados_tecnico %}
-                {% include '_panel_historial_completados.html' with context %}
+            <div id="panel-completados" class="fade-panel">
+                <div class="card">
+                    <div class="card-header">Historial de Tareas Finalizadas</div>
+                    <div class="card-body">
+                        <p class="text-muted">Número de tareas finalizadas: {{ completados|length }}</p>
+                        {% if completados %}
+                        {% for oficio in completados %}
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title">Oficio ID: {{ oficio.id_secuencial }} - Número: {{ oficio.numero_oficio }}</h6>
+                                <p class="card-text"><strong>Parroquia:</strong> {{ oficio.gad_parroquial }} -
+                                    <strong>Cantón:</strong> {{ oficio.canton }}
+                                </p>
+                                <p class="card-text"><strong>Técnico:</strong> {{ oficio.tecnico_name or oficio.tecnico }}</p>
+                                <p class="card-text"><strong>Tipo Asesoría:</strong> {{ oficio.tipo_asesoria }}</p>
+                                <p class="card-text"><strong>Estado:</strong> {{ oficio.sub_estado or 'Concluido' }}</p>
+                                <p class="card-text"><strong>Fecha Asesoría:</strong> {{ oficio.fecha_asesoria_traditional or 'No especificado' }}</p>
+                                <p class="card-text">
+                                    <strong>Anexos:</strong>
+                                    {% if oficio.anexo_nombre %}
+                                    {{ oficio.anexo_nombre }}
+                                    <a href="{{ url_for('download_anexo', oficio_id=oficio._id, tecnico=oficio.tecnico) }}"
+                                        class="btn btn-sm btn-info ms-2" title="Descargar Anexo">
+                                        <i class="bi bi-download"></i> Descargar Anexo
+                                    </a>
+                                    {% else %}
+                                    No especificado
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <p class="text-muted">Sin tareas finalizadas.</p>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
 
-            <!-- Seguimiento Panel -->
-            <div id="panel-seguimiento" class="fade-panel {{ 'active' if current_view == 'seguimiento' else '' }}">
+            <div id="panel-seguimiento" class="fade-panel">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div>
@@ -343,7 +180,7 @@
                                 </div>
                                 <div class="d-flex align-items-center">
                                     <div class="bg-danger" style="width: 20px; height: 20px; border-radius: 3px;"></div>
-                                    <span class="ms-2 small">Asignado - Técnico asignado, sin trabajar</span>
+                                    <span class="ms-2 small">Asignado - Técnico asignado, sin completar</span>
                                 </div>
                                 <div class="d-flex align-items-center">
                                     <div class="bg-info" style="width: 20px; height: 20px; border-radius: 3px;"></div>
@@ -359,7 +196,7 @@
                             <table class="table table-hover table-sm align-middle" id="seguimiento-registros">
                                 <thead>
                                     <tr>
-                                        <th style="cursor: pointer;" onclick="sortSeguimientoDesignById()" title="Click para ordenar">ID <i id="sort-icon-seguimiento-design" class="bi bi-arrow-down-up"></i></th>
+                                        <th style="cursor: pointer;" onclick="sortSeguimientoById()" title="Click para ordenar">ID <i id="sort-icon-seguimiento" class="bi bi-arrow-down-up"></i></th>
                                         <th>Número Oficio</th>
                                         <th>Parroquia</th>
                                         <th>Cantón</th>
@@ -380,19 +217,20 @@
                                     {% set fechas_list = [] %}
                                     {% set anexos_list = [] %}
                                     {% for assignment in assignments %}
-                                    {% set tecnico_data = users | selectattr('username', 'equalto', assignment.tecnico) | list %}
-                                    {% set tecnico_full_name = tecnico_data[0].full_name if tecnico_data else assignment.tecnico %}
-                                    {% set _ = tecnicos_list.append(tecnico_full_name) %}
+                                    {% for user in users %}
+                                    {% if user.username == assignment.tecnico %}
+                                    {% set _ = tecnicos_list.append(user.full_name) %}
+                                    {% endif %}
+                                    {% endfor %}
                                     {% set _ = tipos_list.append(assignment.tipo_asesoria) %}
                                     {% set _ = sub_estados_list.append(assignment.sub_estado or 'Asignado') %}
-                                    {% set _ = fechas_list.append(assignment.fecha_asesoria_formatted or 'N/A') %}
+                                    {% set _ = fechas_list.append(assignment.fecha_asesoria_traditional or 'N/A') %}
                                     {% set _ = anexos_list.append(assignment.anexo_nombre or '') %}
                                     {% endfor %}
                                     <tr data-id="{{ oficio.id_secuencial }}"
                                         data-numero="{{ oficio.numero_oficio|lower }}"
                                         data-gad="{{ oficio.gad_parroquial|lower }}"
-                                        data-canton="{{ oficio.canton|lower }}" 
-                                        data-estado="{{ oficio.estado|lower }}"
+                                        data-canton="{{ oficio.canton|lower }}" data-estado="{{ oficio.estado|lower }}"
                                         data-tecnico="{{ tecnicos_list|join(',')|lower }}"
                                         data-tipo_asesoria="{{ tipos_list|join(',')|lower }}"
                                         data-sub_estado="{{ sub_estados_list|join(',')|lower }}"
@@ -406,9 +244,7 @@
                                         <td>
                                             {% if assignments %}
                                             {% for assignment in assignments %}
-                                            {% set tecnico_data = users | selectattr('username', 'equalto', assignment.tecnico) | list %}
-                                            {% set tecnico_full_name = tecnico_data[0].full_name if tecnico_data else assignment.tecnico %}
-                                            <div class="mb-1"><strong>{{ tecnico_full_name }}</strong> - {{ assignment.tipo_asesoria }}</div>
+                                            <div class="mb-1"><strong>{{ assignment.tecnico_name or assignment.tecnico }}</strong> - {{ assignment.tipo_asesoria }}</div>
                                             {% endfor %}
                                             {% else %}
                                             -
@@ -426,7 +262,7 @@
                                         <td>
                                             {% if assignments %}
                                             {% for assignment in assignments %}
-                                            <div class="mb-1">{{ assignment.fecha_asesoria_formatted or 'N/A' }}</div>
+                                            <div class="mb-1">{{ assignment.fecha_asesoria_traditional or 'N/A' }}</div>
                                             {% endfor %}
                                             {% else %}
                                             -
@@ -438,9 +274,9 @@
                                             <div class="mb-1">
                                                 {{ 'True' if assignment.anexo_nombre else 'False' }}
                                                 {% if assignment.anexo_nombre %}
-                                                <a href="{{ url_for('preview_anexo', oficio_id=oficio._id, assignment_index=loop.index0) }}"
-                                                    class="btn btn-sm btn-secondary ms-1" target="_blank" title="Ver anexo">
-                                                    <i class="bi bi-eye"></i>
+                                                <a href="{{ url_for('download_anexo_by_index', oficio_id=oficio._id, assignment_index=loop.index0) }}"
+                                                    class="btn btn-sm btn-secondary ms-1">
+                                                    <i class="bi bi-paperclip"></i>
                                                 </a>
                                                 {% endif %}
                                             </div>
@@ -478,131 +314,6 @@
                         {% else %}
                         <p class="text-muted">Sin oficios para mostrar.</p>
                         {% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Modal para Designar Técnico -->
-            <div class="modal fade" id="designModal" tabindex="-1" aria-labelledby="designModalLabel"
-                aria-hidden="true">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="designModalLabel">Designar Técnico</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <form id="designForm" method="POST" action="{{ url_for('design') }}">
-                                <input type="hidden" name="oficio_id" id="design_oficio_id">
-                                <input type="hidden" name="numero_oficio" id="design_numero_oficio">
-                                <div id="assignments">
-                                    <div class="tecnico-asesoria-pair mb-2">
-                                        <div class="row g-2 align-items-center">
-                                            <div class="col">
-                                                <select name="tecnico_asignado[]" class="form-select form-select-sm tecnico-select"
-                                                    required>
-                                                    <option value="" disabled selected>Seleccione Técnico</option>
-                                                    {% for tecnico in users %}
-                                                    {% if tecnico.role != 'admin' %}
-                                                    <option value="{{ tecnico.username }}">{{ tecnico.full_name |
-                                                        default(tecnico.username, true) }}</option>
-                                                    {% endif %}
-                                                    {% endfor %}
-                                                </select>
-                                            </div>
-                                            <div class="col">
-                                                <select name="tipo_asesoria[]" class="form-select form-select-sm tipo-select"
-                                                    required>
-                                                    <option value="" disabled selected>Tipo Asesoría</option>
-                                                    {% for tipo in tipos_asesoria %}
-                                                    <option value="{{ tipo }}">{{ tipo }}</option>
-                                                    {% endfor %}
-                                                </select>
-                                            </div>
-                                            <div class="col-auto">
-                                                <button type="button"
-                                                    class="btn btn-sm btn-danger remove-pair">X</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <button type="button" class="btn btn-sm btn-primary mt-2"
-                                    onclick="addTechnicianPair(document.getElementById('assignments'))">Añadir
-                                    Técnico</button>
-                                <script>
-                                document.addEventListener('DOMContentLoaded', function() {
-                                    const designModal = document.getElementById('designModal');
-                                    designModal.addEventListener('shown.bs.modal', function() {
-                                        const tecnicoSelect = designModal.querySelector('.tecnico-select');
-                                        const tipoSelect = designModal.querySelector('.tipo-select');
-                                        
-                                        tecnicoSelect.addEventListener('change', function() {
-                                            updateTiposAsesoriaByTecnico(tecnicoSelect, tipoSelect);
-                                        });
-                                    });
-                                });
-                                </script>
-                                <button type="submit" name="designar"
-                                    class="btn btn-sm btn-success mt-2">Designar</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Modal para Editar Registro -->
-            <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="editModalLabel">Editar Registro</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <form id="editOficioForm" method="POST" action="{{ url_for('design') }}">
-                                <input type="hidden" name="oficio_id" id="edit_oficio_id">
-                                <!-- Hidden fields to submit data -->
-                                <input type="hidden" name="fecha_enviado" id="hidden_fecha_enviado">
-                                <input type="hidden" name="numero_oficio" id="hidden_numero_oficio">
-                                <input type="hidden" name="gad_parroquial" id="hidden_gad_parroquial">
-                                <input type="hidden" name="canton" id="hidden_canton">
-                                <input type="hidden" name="detalle" id="hidden_detalle">
-                                <div class="mb-3">
-                                    <label for="edit_fecha_enviado" class="form-label">Fecha Enviado</label>
-                                    <input type="date" class="form-control" id="edit_fecha_enviado" disabled>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="edit_numero_oficio" class="form-label">Número de Oficio</label>
-                                    <input type="text" class="form-control" id="edit_numero_oficio" disabled>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="edit_gad_parroquial" class="form-label">GAD Parroquial</label>
-                                    <select class="form-select" id="edit_gad_parroquial" onchange="updateCantonEdit()" disabled>
-                                        <option value="" disabled>Seleccione...</option>
-                                        {% for parroquia in parroquias %}
-                                        <option value="{{ parroquia.parroquia }}">{{ parroquia.parroquia }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="edit_canton" class="form-label">Cantón</label>
-                                    <input type="text" class="form-control" id="edit_canton" disabled>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="edit_detalle" class="form-label">Detalle</label>
-                                    <textarea class="form-control" id="edit_detalle" rows="4" disabled></textarea>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Asignaciones</label>
-                                    <div id="editAssignments"></div>
-                                    <button type="button" class="btn btn-sm btn-primary mt-2"
-                                        onclick="addTechnicianPair(document.getElementById('editAssignments'))">Añadir
-                                        Técnico</button>
-                                    <button type="submit" class="btn btn-success btn-sm mt-2" name="edit_oficio">Guardar
-                                        Cambios</button>
-                                </div>
-                            </form>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -675,6 +386,7 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body" id="informeContent">
+                            <!-- Content will be loaded here -->
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-primary" onclick="printInforme()">
@@ -709,13 +421,21 @@
             </div>
         </div>
     </div>
-    <div id="data-tecnicos" style="display:none;">{{ users | tojson | safe }}</div>
-    <div id="data-tipos-asesoria" style="display:none;">{{ tipos_asesoria | tojson | safe }}</div>
 
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const alerts = document.querySelectorAll('.alert');
+        alerts.forEach(function (alert) {
+            setTimeout(function () {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            }, 5000);
+        });
+    });
+
     const oficiosData = {
         {% for oficio in oficios %}
         '{{ oficio._id }}': {
@@ -726,7 +446,7 @@
                     'tipo_asesoria': {{ (assignment.tipo_asesoria or '') | tojson | safe }},
                     'sub_estado': {{ (assignment.sub_estado or 'Asignado') | tojson | safe }},
                     'desarrollo_actividad': {{ (assignment.desarrollo_actividad or '') | tojson | safe }},
-                    'fecha_asesoria_formatted': {{ (assignment.fecha_asesoria_formatted or 'N/A') | tojson | safe }},
+                    'fecha_asesoria_formatted': {{ (assignment.fecha_asesoria_traditional or 'N/A') | tojson | safe }},
                     'entrega_recepcion': {{ (assignment.entrega_recepcion or 'No Aplica') | tojson | safe }},
                     'oficio_delegacion': {{ (assignment.oficio_delegacion or '') | tojson | safe }},
                     'acta_entrega': {{ (assignment.acta_entrega or '') | tojson | safe }},

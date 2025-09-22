@@ -1,10 +1,11 @@
-<!DOCTYPE html>
+<!DOCTYPE html>    
 <html lang="es">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel Técnico</title>
+    <link rel="icon" type="image/png" href="https://i.postimg.cc/y30hqcg3/45fd5a1a-670a-4ce5-8ac8-dc135faffeb8.png">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
 </head>
@@ -12,7 +13,10 @@
 <body data-current-view="{{ current_view }}" data-current-role="tecnico">
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">Sistema de Gestión de Oficios</a>
+            <a class="navbar-brand d-flex align-items-center" href="#">
+                <img src="https://i.postimg.cc/xJb8Nq85/90e6515f-d480-4a53-bc73-6d28da2d6ba8.png" alt="CONAGOPARE" style="height: 50px; width: auto; object-fit: contain;" class="me-2">
+                Sistema de Gestión de Oficios
+            </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
                 aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
@@ -27,6 +31,11 @@
                         <a class="nav-link" id="tab-completados" onclick="showPanel('completados')" href="#">Historial
                             de Tareas Finalizadas</a>
                     </li>
+                    {% if current_user.role == 'coordinacion' %}
+                    <li class="nav-item">
+                        <a class="nav-link" id="tab-seguimiento" onclick="showPanel('seguimiento')" href="#">Seguimiento</a>
+                    </li>
+                    {% endif %}
                     {% if session.role == 'admin' %}
                     <li class="nav-item">
                         <a class="nav-link" id="tab-usuarios" onclick="showPanel('usuarios')" href="#">Gestión de
@@ -88,6 +97,12 @@
 
         <div class="main-container">
             <div id="panel-asignados" class="fade-panel active">
+                {% set editable = true %}
+                {% set form_action = 'tecnico' %}
+                {% include '_panel_tecnico.html' with context %}
+            </div>
+            
+            <div id="panel-asignados-old" class="fade-panel" style="display: none;">
                 <div class="card">
                     <div class="card-header">Asignaciones Pendientes</div>
                     <div class="card-body">
@@ -353,6 +368,199 @@
                 </div>
             </div>
 
+            {% if current_user.role == 'coordinacion' %}
+            <div id="panel-seguimiento" class="fade-panel">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-archive me-2"></i>Seguimiento de Oficios
+                        </div>
+                        <div>
+                            <a href="{{ url_for('generate_report', format='pdf') }}" class="btn btn-danger btn-sm me-2">
+                                <i class="bi bi-file-pdf"></i> PDF
+                            </a>
+                            <a href="{{ url_for('generate_report', format='excel') }}" class="btn btn-success btn-sm">
+                                <i class="bi bi-file-excel"></i> Excel
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">Número de oficios: {{ seguimiento|length }}</p>
+                        <div class="mb-4">
+                            <h6>Filtrar Registros</h6>
+                            <div class="row g-2">
+                                <div class="col-md-3">
+                                    <select class="form-select" id="filterFieldSeguimiento">
+                                        <option value="id">ID Secuencial</option>
+                                        <option value="numero">Número de Oficio</option>
+                                        <option value="gad">GAD Parroquial</option>
+                                        <option value="canton">Cantón</option>
+                                        <option value="estado">Estado</option>
+                                        <option value="tecnico">Técnico</option>
+                                        <option value="tipo_asesoria">Tipo Asesoría</option>
+                                        <option value="sub_estado">Sub-Estado</option>
+                                        <option value="anexos">Anexos</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <input type="text" class="form-control" id="filterValueSeguimiento"
+                                        placeholder="Ingrese valor de búsqueda (True/False para Anexos)">
+                                </div>
+                            </div>
+                        </div>
+                        {% if seguimiento %}
+                        <!-- Indicadores de colores -->
+                        <div class="mb-3">
+                            <div class="d-flex flex-wrap gap-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-warning" style="width: 20px; height: 20px; border-radius: 3px;"></div>
+                                    <span class="ms-2 small">Pendiente - Sin asignar técnico</span>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-danger" style="width: 20px; height: 20px; border-radius: 3px;"></div>
+                                    <span class="ms-2 small">Asignado - Técnico asignado, sin completar</span>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-info" style="width: 20px; height: 20px; border-radius: 3px;"></div>
+                                    <span class="ms-2 small">Parcial - Algunos técnicos terminaron</span>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-success" style="width: 20px; height: 20px; border-radius: 3px;"></div>
+                                    <span class="ms-2 small">Concluido - Todos los técnicos terminaron</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover table-sm align-middle" id="seguimiento-registros">
+                                <thead>
+                                    <tr>
+                                        <th style="cursor: pointer;" onclick="sortSeguimientoById()" title="Click para ordenar">ID <i id="sort-icon-seguimiento" class="bi bi-arrow-down-up"></i></th>
+                                        <th>Número Oficio</th>
+                                        <th>Parroquia</th>
+                                        <th>Cantón</th>
+                                        <th>Estado</th>
+                                        <th>Técnicos / Asignaciones</th>
+                                        <th>Sub-Estado</th>
+                                        <th>Fecha Asesoría</th>
+                                        <th>Anexos</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for oficio in seguimiento %}
+                                    {% set assignments = oficio.assignments if oficio.assignments else [] %}
+                                    {% set tecnicos_list = [] %}
+                                    {% set tipos_list = [] %}
+                                    {% set sub_estados_list = [] %}
+                                    {% set fechas_list = [] %}
+                                    {% set anexos_list = [] %}
+                                    {% for assignment in assignments %}
+                                    {% for user in users %}
+                                    {% if user.username == assignment.tecnico %}
+                                    {% set _ = tecnicos_list.append(user.full_name) %}
+                                    {% endif %}
+                                    {% endfor %}
+                                    {% set _ = tipos_list.append(assignment.tipo_asesoria) %}
+                                    {% set _ = sub_estados_list.append(assignment.sub_estado or 'Asignado') %}
+                                    {% set _ = fechas_list.append(assignment.fecha_asesoria_traditional or 'N/A') %}
+                                    {% set _ = anexos_list.append(assignment.anexo_nombre or '') %}
+                                    {% endfor %}
+                                    <tr data-id="{{ oficio.id_secuencial }}"
+                                        data-numero="{{ oficio.numero_oficio|lower }}"
+                                        data-gad="{{ oficio.gad_parroquial|lower }}"
+                                        data-canton="{{ oficio.canton|lower }}" data-estado="{{ oficio.estado|lower }}"
+                                        data-tecnico="{{ tecnicos_list|join(',')|lower }}"
+                                        data-tipo_asesoria="{{ tipos_list|join(',')|lower }}"
+                                        data-sub_estado="{{ sub_estados_list|join(',')|lower }}"
+                                        data-anexos="{{ 'true' if anexos_list|select|list else 'false' }}"
+                                        class="{% if oficio.estado == 'pendiente' %}table-warning{% elif assignments %}{% set concluidos = assignments|selectattr('sub_estado', 'equalto', 'Concluido')|list %}{% set total = assignments|length %}{% if concluidos|length == total and total > 0 %}table-success{% elif concluidos|length > 0 %}table-info{% else %}table-danger{% endif %}{% else %}table-warning{% endif %}">
+                                        <td>{{ oficio.id_secuencial }}</td>
+                                        <td>{{ oficio.numero_oficio }}</td>
+                                        <td>{{ oficio.gad_parroquial }}</td>
+                                        <td>{{ oficio.canton }}</td>
+                                        <td>{{ oficio.estado|capitalize }}</td>
+                                        <td>
+                                            {% if assignments %}
+                                            {% for assignment in assignments %}
+                                            {% for user in users %}
+                                            {% if user.username == assignment.tecnico %}
+                                            <div class="mb-1"><strong>{{ user.full_name }}</strong> - {{ assignment.tipo_asesoria }}</div>
+                                            {% endif %}
+                                            {% endfor %}
+                                            {% endfor %}
+                                            {% else %}
+                                            -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if assignments %}
+                                            {% for assignment in assignments %}
+                                            <div class="mb-1">{{ assignment.sub_estado or 'Asignado' }}</div>
+                                            {% endfor %}
+                                            {% else %}
+                                            -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if assignments %}
+                                            {% for assignment in assignments %}
+                                            <div class="mb-1">{{ assignment.fecha_asesoria_traditional or 'N/A' }}</div>
+                                            {% endfor %}
+                                            {% else %}
+                                            -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if assignments %}
+                                            {% for assignment in assignments %}
+                                            <div class="mb-1">
+                                                {{ 'True' if assignment.anexo_nombre else 'False' }}
+                                                {% if assignment.anexo_nombre %}
+                                                <a href="{{ url_for('download_anexo_by_index', oficio_id=oficio._id, assignment_index=loop.index0) }}"
+                                                    class="btn btn-sm btn-secondary ms-1">
+                                                    <i class="bi bi-paperclip"></i>
+                                                </a>
+                                                {% endif %}
+                                            </div>
+                                            {% endfor %}
+                                            {% else %}
+                                            False
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if assignments %}
+                                            <button type="button" class="btn btn-sm btn-success informe-btn"
+                                                data-bs-toggle="modal" data-bs-target="#informeModal"
+                                                onclick="showInforme('{{ oficio._id }}', '{{ oficio.numero_oficio }}', '{{ oficio.gad_parroquial }}', '{{ oficio.canton }}')">
+                                                <i class="bi bi-file-text"></i> Informe
+                                            </button>
+                                            {% endif %}
+                                            {% if oficio.archivo_nombre %}
+                                            <button type="button" class="btn btn-sm btn-info preview-btn"
+                                                data-bs-toggle="modal" data-bs-target="#previewModal"
+                                                data-id="{{ oficio._id }}"
+                                                data-archivo-nombre="{{ oficio.archivo_nombre }}">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                            <a href="{{ url_for('download', oficio_id=oficio._id) }}"
+                                                class="btn btn-sm btn-primary">
+                                                <i class="bi bi-download"></i>
+                                            </a>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted">Sin oficios para mostrar.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             {% if session.role == 'admin' %}
             <div id="panel-usuarios" class="fade-panel">
                 <div class="card">
@@ -470,6 +678,24 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Modal para Informe -->
+            <div class="modal fade" id="informeModal" tabindex="-1" aria-labelledby="informeModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="informeModalLabel">Informe de Actividades</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body" id="informeContent">
+                            <!-- Content will be loaded here -->
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -485,6 +711,79 @@
                     }, 5000);
                 });
             });
+
+            const oficiosData = {
+                {% for oficio in seguimiento %}
+                '{{ oficio._id }}': {
+                    'assignments': [
+                        {% for assignment in oficio.assignments %}
+                        {
+                            'tecnico': {{ (assignment.tecnico or '') | tojson | safe }},
+                            'tipo_asesoria': {{ (assignment.tipo_asesoria or '') | tojson | safe }},
+                            'sub_estado': {{ (assignment.sub_estado or 'Asignado') | tojson | safe }},
+                            'desarrollo_actividad': {{ (assignment.desarrollo_actividad or '') | tojson | safe }},
+                            'fecha_asesoria_formatted': {{ (assignment.fecha_asesoria_traditional or 'N/A') | tojson | safe }},
+                            'entrega_recepcion': {{ (assignment.entrega_recepcion or 'No Aplica') | tojson | safe }},
+                            'oficio_delegacion': {{ (assignment.oficio_delegacion or '') | tojson | safe }},
+                            'acta_entrega': {{ (assignment.acta_entrega or '') | tojson | safe }},
+                            'anexo_nombre': {{ (assignment.anexo_nombre or '') | tojson | safe }}
+                        }{% if not loop.last %},{% endif %}
+                        {% endfor %}
+                    ]
+                }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            };
+            
+            function showInforme(oficioId, numeroOficio, parroquia, canton) {
+                const users = {{ users | tojson | safe }};
+                const oficio = oficiosData[oficioId];
+                
+                if (!oficio || !oficio.assignments) {
+                    document.getElementById('informeContent').innerHTML = '<p class="text-muted">No hay información disponible.</p>';
+                    return;
+                }
+                
+                let content = `
+                    <div class="mb-3">
+                        <h6><strong>Oficio:</strong> ${numeroOficio}</h6>
+                        <p><strong>Parroquia:</strong> ${parroquia} - <strong>Cantón:</strong> ${canton}</p>
+                    </div>
+                    <hr>
+                `;
+                
+                oficio.assignments.forEach((assignment, index) => {
+                    const user = users.find(u => u.username === assignment.tecnico);
+                    const tecnicoName = user ? user.full_name : assignment.tecnico;
+                    
+                    content += `
+                        <div class="mb-4">
+                            <h6 class="text-primary">Técnico: ${tecnicoName}</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Tipo Asesoría:</strong> ${assignment.tipo_asesoria || 'N/A'}</p>
+                                    <p><strong>Estado:</strong> <span class="badge ${assignment.sub_estado === 'Concluido' ? 'bg-success' : assignment.sub_estado === 'En proceso' ? 'bg-warning' : 'bg-danger'}">${assignment.sub_estado || 'Asignado'}</span></p>
+                                    <p><strong>Fecha Asesoría:</strong> ${assignment.fecha_asesoria_formatted || 'N/A'}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Entrega Recepción:</strong> ${assignment.entrega_recepcion || 'No Aplica'}</p>
+                                    ${assignment.entrega_recepcion === 'Aplica' ? `
+                                        <p><strong>Oficio Delegación:</strong> ${assignment.oficio_delegacion || 'N/A'}</p>
+                                        <p><strong>Acta Entrega:</strong> ${assignment.acta_entrega || 'N/A'}</p>
+                                    ` : ''}
+                                    <p><strong>Anexo:</strong> ${assignment.anexo_nombre ? 'Sí' : 'No'}</p>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <p><strong>Desarrollo de Actividad:</strong></p>
+                                <div class="bg-light p-2 rounded">${assignment.desarrollo_actividad || 'Sin descripción'}</div>
+                            </div>
+                            ${index < oficio.assignments.length - 1 ? '<hr>' : ''}
+                        </div>
+                    `;
+                });
+                
+                document.getElementById('informeContent').innerHTML = content;
+            }
         </script>
 
 </body>

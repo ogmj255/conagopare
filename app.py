@@ -632,44 +632,68 @@ def receive():
                     oficio_data['archivo_nombre'] = secure_filename(archivo.filename)
 
                 try:
+                    print(f"[EMAIL DEBUG] About to insert oficio...")
                     oficios.insert_one(oficio_data)
+                    print(f"[EMAIL DEBUG] Oficio inserted successfully")
                     reordenar_ids_secuenciales(year)
-                    designers = users.find({'role': {'$in': ['designer', 'admin']}})
-                    designers_list = list(designers)
-                    print(f"[EMAIL DEBUG] Found {len(designers_list)} designers/admins")
-                    for designer in designers_list:
-                        print(f"[EMAIL DEBUG] Processing designer: {designer['username']}, email: {designer.get('email', 'NO EMAIL')}, role: {designer.get('role', 'NO ROLE')}")
-                        notifications.insert_one({
-                            'user': designer['username'],
-                            'message': f'📋 Nuevo oficio de {gad_parroquial} ({canton}) requiere designación',
-                            'details': f'Oficio: {numero_oficio} | ID: {id_secuencial}',
-                            'type': 'new_oficio',
-                            'oficio_id': id_secuencial,
-                            'priority': 'normal',
-                            'timestamp': datetime.now().isoformat(),
-                            'read': False
-                        })
-                        if designer.get('email'):
-                            print(f"[EMAIL DEBUG] Sending email to designer {designer['username']} at {designer['email']}")
-                            print(f"[EMAIL DEBUG] SMTP Config - Server: {os.getenv('SMTP_SERVER')}, Port: {os.getenv('SMTP_PORT')}, User: {os.getenv('SMTP_USERNAME')}")
-                            send_email_notification(
-                                designer['email'],
-                                f'Nuevo Oficio Requiere Designación - {id_secuencial}',
-                                f'Se ha registrado un nuevo oficio de {gad_parroquial} ({canton}) que requiere designación de técnico.',
-                                {
-                                    'id_secuencial': id_secuencial,
-                                    'numero_oficio': numero_oficio,
-                                    'gad_parroquial': gad_parroquial,
-                                    'canton': canton,
-                                    'detalle': detalle
-                                }
-                            )
-                        else:
-                            print(f"[EMAIL DEBUG] No email configured for designer {designer['username']}")
-                    print(f"[EMAIL DEBUG] Email sending process completed")
+                    print(f"[EMAIL DEBUG] Starting email notification process...")
+                    
+                    try:
+                        designers = users.find({'role': {'$in': ['designer', 'admin']}})
+                        designers_list = list(designers)
+                        print(f"[EMAIL DEBUG] Found {len(designers_list)} designers/admins")
+                        
+                        for designer in designers_list:
+                            print(f"[EMAIL DEBUG] Processing designer: {designer['username']}, email: {designer.get('email', 'NO EMAIL')}, role: {designer.get('role', 'NO ROLE')}")
+                            
+                            try:
+                                notifications.insert_one({
+                                    'user': designer['username'],
+                                    'message': f'📋 Nuevo oficio de {gad_parroquial} ({canton}) requiere designación',
+                                    'details': f'Oficio: {numero_oficio} | ID: {id_secuencial}',
+                                    'type': 'new_oficio',
+                                    'oficio_id': id_secuencial,
+                                    'priority': 'normal',
+                                    'timestamp': datetime.now().isoformat(),
+                                    'read': False
+                                })
+                                print(f"[EMAIL DEBUG] Notification inserted for {designer['username']}")
+                            except Exception as notif_error:
+                                print(f"[EMAIL DEBUG] Error inserting notification: {str(notif_error)}")
+                            
+                            if designer.get('email'):
+                                print(f"[EMAIL DEBUG] Sending email to designer {designer['username']} at {designer['email']}")
+                                print(f"[EMAIL DEBUG] SMTP Config - Server: {os.getenv('SMTP_SERVER')}, Port: {os.getenv('SMTP_PORT')}, User: {os.getenv('SMTP_USERNAME')}")
+                                try:
+                                    send_email_notification(
+                                        designer['email'],
+                                        f'Nuevo Oficio Requiere Designación - {id_secuencial}',
+                                        f'Se ha registrado un nuevo oficio de {gad_parroquial} ({canton}) que requiere designación de técnico.',
+                                        {
+                                            'id_secuencial': id_secuencial,
+                                            'numero_oficio': numero_oficio,
+                                            'gad_parroquial': gad_parroquial,
+                                            'canton': canton,
+                                            'detalle': detalle
+                                        }
+                                    )
+                                    print(f"[EMAIL DEBUG] Email function called for {designer['username']}")
+                                except Exception as email_error:
+                                    print(f"[EMAIL DEBUG] Error calling email function: {str(email_error)}")
+                            else:
+                                print(f"[EMAIL DEBUG] No email configured for designer {designer['username']}")
+                        
+                        print(f"[EMAIL DEBUG] Email sending process completed")
+                    except Exception as email_process_error:
+                        print(f"[EMAIL DEBUG] Error in email process: {str(email_process_error)}")
+                    
                     flash('Oficio registrado exitosamente.', 'success')
                 except PyMongoError as e:
+                    print(f"[EMAIL DEBUG] Database error during oficio registration: {str(e)}")
                     flash(f'Error de base de datos al registrar oficio: {str(e)}', 'error')
+                except Exception as general_error:
+                    print(f"[EMAIL DEBUG] General error during oficio registration: {str(general_error)}")
+                    flash(f'Error general: {str(general_error)}', 'error')
                 return redirect(url_for('receive', current_view='registrar'))
 
             elif 'edit_oficio' in request.form:

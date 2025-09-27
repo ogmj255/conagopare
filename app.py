@@ -24,8 +24,8 @@ load_dotenv()
 app.secret_key = os.getenv('SECRET_KEY', 'a1eb8b7d4c7a96ea202923296486a51c')
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-app.permanent_session_lifetime = timedelta(minutes=15)
-app.config['SESSION_PERMANENT'] = False
+app.permanent_session_lifetime = timedelta(minutes=10)
+app.config['SESSION_PERMANENT'] = True
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -41,7 +41,7 @@ try:
         serverSelectionTimeoutMS=10000,
         connectTimeoutMS=10000,
         socketTimeoutMS=10000,
-        maxPoolSize=10,
+        maxPoolSize=5,
         retryWrites=True
     )
     client.admin.command('ping')
@@ -69,6 +69,7 @@ notifications = db_oficios['notifications']
 tipos_asesoria_coll = db_oficios['tipos_asesoria']
 logs = db_oficios['logs']
 errors = db_oficios['errors']
+active_sessions = db_oficios['active_sessions']
 fs = GridFS(db_oficios)
 
 class User(UserMixin):
@@ -96,6 +97,18 @@ try:
     print("Índice único creado para id_secuencial.")
 except Exception as e:
     print(f"Error al crear índice: {e}")
+
+try:
+    active_sessions.create_index([('username', 1), ('session_id', 1)], unique=True)
+    active_sessions.create_index([('last_activity', 1)], expireAfterSeconds=3600)
+    oficios.create_index([('estado', 1)])
+    oficios.create_index([('fecha_recibido', -1)])
+    users.create_index([('username', 1)])
+    users.create_index([('role', 1)])
+    notifications.create_index([('user', 1), ('read', 1)])
+    print("Índices creados para optimización.")
+except Exception as e:
+    print(f"Error al crear índices: {e}")
 
 def log_user_action(username, action, details, ip_address=None):
     """Log user actions"""
@@ -226,8 +239,10 @@ def send_email_notification(to_email, subject, message, oficio_data=None):
             print(f"[EMAIL ERROR] Error sending email to {to_email}: {e}")
             return False
     
-    print(f"[EMAIL DEBUG] Sending email synchronously to {to_email}")
-    return send_async_email()
+    print(f"[EMAIL DEBUG] Starting email thread for {to_email}")
+    thread = threading.Thread(target=send_async_email)
+    thread.daemon = True
+    thread.start()
 
 def get_tipos_asesoria():
     return [t['nombre'] for t in tipos_asesoria_coll.find()] or ['Asesoría Técnica', 'Inspección', 'Consultoría']
@@ -292,6 +307,19 @@ def reordenar_ids_secuenciales(year):
         new_id = f"{prefix}{i:04d}"
         oficios.update_one({'_id': doc['_id']}, {'$set': {'id_secuencial': new_id}})
 
+def cleanup_expired_sessions():
+    """Clean up expired sessions older than 1 hour"""
+    try:
+        cutoff_time = datetime.now() - timedelta(hours=1)
+        result = active_sessions.delete_many({'last_activity': {'$lt': cutoff_time}})
+        if result.deleted_count > 0:
+            print(f"Cleaned up {result.deleted_count} expired sessions")
+    except Exception as e:
+        print(f"Error cleaning up sessions: {e}")
+
+# Run cleanup on startup
+cleanup_expired_sessions()
+
 for oficio in oficios.find({'assignments': {'$exists': True}}):
     assignments = oficio.get('assignments', [])
     updated_assignments = []
@@ -325,21 +353,45 @@ for oficio in oficios.find({'assignments': {'$exists': True}}):
 @app.before_request
 def check_session_timeout():
     if current_user.is_authenticated:
-        last_activity = session.get('last_activity')
+        session_id = session.get('session_id')
+        username = current_user.username
+        
+        # Check if session exists in database
+        active_session = active_sessions.find_one({'username': username, 'session_id': session_id})
+        
+        if not active_session:
+            logout_user()
+            session.clear()
+            flash('Sesión cerrada - Usuario conectado desde otro dispositivo.', 'warning')
+            return redirect(url_for('login'))
+        
+        # Check timeout (10 minutes = 600 seconds)
+        last_activity = active_session.get('last_activity')
         if last_activity:
             try:
-                last_activity_time = datetime.fromisoformat(last_activity)
-                if (datetime.now() - last_activity_time).total_seconds() > 900:
+                if isinstance(last_activity, str):
+                    last_activity_time = datetime.fromisoformat(last_activity)
+                else:
+                    last_activity_time = last_activity
+                    
+                if (datetime.now() - last_activity_time).total_seconds() > 600:
+                    active_sessions.delete_one({'username': username, 'session_id': session_id})
                     logout_user()
                     session.clear()
-                    flash('Sesión cerrada por inactividad.', 'info')
+                    flash('Sesión cerrada por inactividad (10 minutos).', 'info')
                     return redirect(url_for('login'))
-            except ValueError:
+            except (ValueError, TypeError):
+                active_sessions.delete_one({'username': username, 'session_id': session_id})
                 logout_user()
                 session.clear()
                 flash('Error en la sesión. Por favor, inicia sesión nuevamente.', 'error')
                 return redirect(url_for('login'))
-        session['last_activity'] = datetime.now().isoformat()
+        
+        # Update last activity
+        active_sessions.update_one(
+            {'username': username, 'session_id': session_id},
+            {'$set': {'last_activity': datetime.now()}}
+        )
 
 @app.route('/')
 def index():
@@ -389,8 +441,32 @@ def login():
                 else:
                     password_match = bcrypt.checkpw(password, stored_password.data)
                 if password_match:
+                    import uuid
+                    
+                    # Generate unique session ID
+                    session_id = str(uuid.uuid4())
+                    
+                    # Check if user has sessions from different IP
+                    existing_sessions = list(active_sessions.find({'username': username}))
+                    current_ip = request.remote_addr
+                    
+                    # Remove sessions from different IPs (different devices)
+                    for existing_session in existing_sessions:
+                        if existing_session.get('ip_address') != current_ip:
+                            active_sessions.delete_one({'_id': existing_session['_id']})
+                    
+                    # Create new session record
+                    active_sessions.insert_one({
+                        'username': username,
+                        'session_id': session_id,
+                        'login_time': datetime.now(),
+                        'last_activity': datetime.now(),
+                        'ip_address': current_ip
+                    })
+                    
                     user_obj = User(username=user['username'], role=user['role'])
                     login_user(user_obj)
+                    session['session_id'] = session_id
                     session['full_name'] = f"{user.get('nombre', '')} {user.get('apellido', '')}".strip() or username
                     log_user_action(username, 'LOGIN', f'Usuario {username} inició sesión', request.remote_addr)
                     return redirect(url_for('index'))
@@ -406,6 +482,12 @@ def login():
 @login_required
 def logout():
     username = current_user.username
+    session_id = session.get('session_id')
+    
+    # Remove session from database
+    if session_id:
+        active_sessions.delete_one({'username': username, 'session_id': session_id})
+    
     log_user_action(username, 'LOGOUT', f'Usuario {username} cerró sesión', request.remote_addr)
     logout_user()
     session.clear()
@@ -414,13 +496,17 @@ def logout():
 @app.route('/change_password', methods=['POST'])
 @login_required
 def change_password():
-    old_password = request.form.get('old_password').encode('utf-8')
-    new_password = request.form.get('new_password').encode('utf-8')
-    confirm_password = request.form.get('confirm_password').encode('utf-8')
+    old_password = request.form.get('old_password', '')
+    new_password = request.form.get('new_password', '')
+    confirm_password = request.form.get('confirm_password', '')
     
     if not old_password or not new_password or not confirm_password:
         flash('Todos los campos son obligatorios', 'error')
         return redirect(url_for('index'))
+    
+    old_password = old_password.encode('utf-8')
+    new_password = new_password.encode('utf-8')
+    confirm_password = confirm_password.encode('utf-8')
     
     try:
         user = users.find_one({'username': current_user.username})
@@ -444,7 +530,10 @@ def get_notifications():
     if not current_user.is_authenticated:
         return jsonify({'notifications': [], 'count': 0})
     try:
-        user_notifications = list(notifications.find({'user': current_user.username, 'read': False}).sort('timestamp', -1))
+        user_notifications = list(notifications.find(
+            {'user': current_user.username, 'read': False},
+            {'message': 1, 'details': 1, 'type': 1, 'priority': 1, 'oficio_id': 1, 'timestamp': 1}
+        ).sort('timestamp', -1).limit(50))
         count = len(user_notifications)
         formatted_notifications = [
             {
@@ -509,6 +598,90 @@ def notificaciones_count():
         return jsonify({'count': count})
     except PyMongoError as e:
         return jsonify({'count': 0, 'error': str(e)})
+
+@app.route('/session_heartbeat', methods=['POST'])
+def session_heartbeat():
+    try:
+        if not current_user.is_authenticated:
+            return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+            
+        session_id = session.get('session_id')
+        username = current_user.username
+        
+        if not session_id:
+            return jsonify({'success': False, 'error': 'No session ID'}), 401
+        
+        # Check if session exists
+        active_session = active_sessions.find_one({'username': username, 'session_id': session_id})
+        
+        if not active_session:
+            return jsonify({'success': False, 'error': 'Session not found'}), 401
+        
+        # Update last activity
+        result = active_sessions.update_one(
+            {'username': username, 'session_id': session_id},
+            {'$set': {'last_activity': datetime.now()}}
+        )
+        
+        if result.matched_count == 0:
+            return jsonify({'success': False, 'error': 'Session expired'}), 401
+            
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/session_cleanup', methods=['POST'])
+@login_required
+def session_cleanup():
+    try:
+        session_id = session.get('session_id')
+        username = current_user.username
+        
+        active_sessions.delete_one({'username': username, 'session_id': session_id})
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/session_status', methods=['GET'])
+def session_status():
+    try:
+        if not current_user.is_authenticated:
+            return jsonify({'valid': False, 'timeLeft': 0, 'reason': 'not_authenticated'})
+            
+        session_id = session.get('session_id')
+        username = current_user.username
+        
+        if not session_id or not isinstance(session_id, str):
+            return jsonify({'valid': False, 'timeLeft': 0, 'reason': 'no_session_id'})
+        
+        active_session = active_sessions.find_one({'username': username, 'session_id': session_id})
+        
+        if not active_session:
+            return jsonify({'valid': False, 'timeLeft': 0, 'reason': 'session_not_found'})
+        
+        last_activity = active_session.get('last_activity')
+        if last_activity:
+            if isinstance(last_activity, str):
+                last_activity_time = datetime.fromisoformat(last_activity)
+            else:
+                last_activity_time = last_activity
+                
+            time_elapsed = (datetime.now() - last_activity_time).total_seconds()
+            time_left = max(0, 600 - time_elapsed)
+            
+            if time_left <= 0:
+                active_sessions.delete_one({'username': username, 'session_id': session_id})
+                return jsonify({'valid': False, 'timeLeft': 0, 'reason': 'expired'})
+            
+            return jsonify({
+                'valid': True,
+                'timeLeft': int(time_left),
+                'lastActivity': last_activity_time.isoformat()
+            })
+        
+        return jsonify({'valid': False, 'timeLeft': 0, 'reason': 'no_activity'})
+    except Exception as e:
+        return jsonify({'valid': False, 'timeLeft': 0, 'reason': 'error', 'error': str(e)})
 
 @app.route('/get_canton', methods=['POST'])
 def get_canton():

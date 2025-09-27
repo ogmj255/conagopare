@@ -3,6 +3,13 @@ window.tipos_asesoria = JSON.parse(document.getElementById('data-tipos-asesoria'
 window.tecnicosData = window.tecnicos;
 window.tiposAsesoriaData = window.tipos_asesoria;
 
+// XSS Protection function
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 function formatDateForInput(dateStr) {
     if (!dateStr) return '';
     const parts = dateStr.split('/');
@@ -139,11 +146,11 @@ async function fetchNotifications() {
                 
                 let content = '<div class="d-flex justify-content-between align-items-start">';
                 content += '<div class="notification-content flex-grow-1">';
-                content += '<div class="notification-message">' + notification.message + '</div>';
+                content += '<div class="notification-message">' + escapeHtml(notification.message) + '</div>';
                 if (notification.details) {
-                    content += '<div class="notification-details text-muted small">' + notification.details + '</div>';
+                    content += '<div class="notification-details text-muted small">' + escapeHtml(notification.details) + '</div>';
                 }
-                content += '<div class="notification-time text-muted small">' + notification.timestamp + '</div>';
+                content += '<div class="notification-time text-muted small">' + escapeHtml(notification.timestamp) + '</div>';
                 content += '</div>';
                 content += '<div class="notification-actions ms-2">';
                 content += '<button class="btn btn-sm btn-outline-success me-1 mark-read-btn" data-id="' + notification.id + '" title="Marcar como leído"><i class="bi bi-check"></i></button>';
@@ -1053,3 +1060,131 @@ function validateAndShowEntregarModal(oficioId) {
 }
 
 window.validateAndShowEntregarModal = validateAndShowEntregarModal;
+
+// Session Management
+(function() {
+    'use strict';
+    
+    let sessionActive = true;
+    let heartbeatInterval;
+    
+    // Send heartbeat every 5 minutes to keep session alive
+    function sendHeartbeat() {
+        if (!sessionActive) return;
+        
+        fetch('/session_heartbeat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'same-origin'
+        }).catch(function(error) {
+            console.log('Heartbeat failed:', error);
+        });
+    }
+    
+    // Start heartbeat when page loads
+    function startHeartbeat() {
+        heartbeatInterval = setInterval(sendHeartbeat, 300000); // 5 minutes
+    }
+    
+    // Stop heartbeat
+    function stopHeartbeat() {
+        if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+        }
+    }
+    
+    // Clean up session when page is about to unload
+    function cleanupSession() {
+        sessionActive = false;
+        stopHeartbeat();
+        
+        // Only cleanup if user is actually leaving (not just refreshing)
+        if (performance.navigation.type !== 1) {
+            navigator.sendBeacon('/session_cleanup', JSON.stringify({
+                action: 'cleanup'
+            }));
+        }
+    }
+    
+    // Handle page visibility changes
+    function handleVisibilityChange() {
+        if (document.hidden) {
+            // Page is hidden, stop heartbeat
+            stopHeartbeat();
+        } else {
+            // Page is visible again, restart heartbeat
+            startHeartbeat();
+        }
+    }
+    
+    // Event listeners
+    window.addEventListener('beforeunload', cleanupSession);
+    window.addEventListener('unload', cleanupSession);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Check session validity every 30 seconds
+    function checkSessionValidity() {
+        if (!sessionActive) return;
+        
+        fetch('/session_heartbeat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'same-origin'
+        })
+        .then(response => {
+            if (response.status === 401) {
+                sessionActive = false;
+                stopHeartbeat();
+                
+                showSessionAlert('Su sesión ha sido cerrada porque se inició sesión desde otro dispositivo.');
+                setTimeout(() => window.location.href = '/login', 3000);
+                return;
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data && !data.success) {
+                sessionActive = false;
+                stopHeartbeat();
+                
+                showSessionAlert('Su sesión ha expirado. Redirigiendo...');
+                setTimeout(() => window.location.href = '/login', 2000);
+            }
+        })
+        .catch(error => {
+            console.log('Session check failed:', error);
+        });
+    }
+    
+    // Show session alert banner
+    function showSessionAlert(message) {
+        const existingAlert = document.getElementById('sessionAlert');
+        if (existingAlert) existingAlert.remove();
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.id = 'sessionAlert';
+        alertDiv.className = 'alert alert-warning alert-dismissible fade show';
+        alertDiv.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; min-width: 400px; text-align: center;';
+        alertDiv.innerHTML = `<strong>Atención:</strong> ${message}`;
+        
+        document.body.appendChild(alertDiv);
+    }
+    
+    // Start heartbeat when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            startHeartbeat();
+            // Check session every 30 seconds
+            setInterval(checkSessionValidity, 30000);
+        });
+    } else {
+        startHeartbeat();
+        // Check session every 30 seconds
+        setInterval(checkSessionValidity, 30000);
+    }
+    
+})();

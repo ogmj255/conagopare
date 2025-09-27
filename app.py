@@ -142,19 +142,20 @@ def log_error(error_type, details, username=None, endpoint=None, level='ERROR'):
         print(f"Error logging error: {e}")
 
 def send_email_notification(to_email, subject, message, oficio_data=None):
-    """Send email notification using Resend"""
+    """Send email notification using SendGrid"""
     def send_async_email():
         try:
             print(f"[EMAIL DEBUG] Attempting to send email to: {to_email}")
             print(f"[EMAIL DEBUG] Subject: {subject}")
             
-            # Check if Resend is configured
-            resend_api_key = os.getenv('RESEND_API_KEY', '')
+            # Check if SendGrid is configured
+            sendgrid_api_key = os.getenv('SENDGRID_API_KEY', '')
+            print(f"[EMAIL DEBUG] SendGrid API Key configured: {'Yes' if sendgrid_api_key else 'No'}")
             
-            if resend_api_key:
-                # Use Resend
-                import resend
-                resend.api_key = resend_api_key
+            if sendgrid_api_key:
+                # Use SendGrid
+                import sendgrid
+                from sendgrid.helpers.mail import Mail
                 
                 html_body = f"""
                 <html>
@@ -180,18 +181,22 @@ def send_email_notification(to_email, subject, message, oficio_data=None):
                 </html>
                 """
                 
-                print(f"[EMAIL DEBUG] Using Resend API...")
+                print(f"[EMAIL DEBUG] Using SendGrid API...")
                 
-                from_email = os.getenv('FROM_EMAIL', 'Sistema CONAGOPARE <onboarding@resend.dev>')
-                params = {
-                    "from": from_email,
-                    "to": [to_email],
-                    "subject": subject,
-                    "html": html_body,
-                }
+                from_email = 'noreply@conagopare.com'
                 
-                email = resend.Emails.send(params)
-                print(f"[EMAIL SUCCESS] Email sent successfully to {to_email} via Resend")
+                message = Mail(
+                    from_email=from_email,
+                    to_emails=to_email,
+                    subject=subject,
+                    html_content=html_body
+                )
+                
+                sg = sendgrid.SendGridAPIClient(api_key=sendgrid_api_key)
+                response = sg.send(message)
+                
+                print(f"[EMAIL DEBUG] SendGrid response status: {response.status_code}")
+                print(f"[EMAIL SUCCESS] Email sent successfully to {to_email} via SendGrid")
                 return True
                 
             else:

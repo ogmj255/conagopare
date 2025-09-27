@@ -710,6 +710,95 @@
                                 </div>
                             </div>
                             
+                            <!-- Sección de Respaldos -->
+                            <div class="mt-4">
+                                <h6><i class="bi bi-shield-check me-2"></i>Gestión de Respaldos por Año</h6>
+                                <div class="row g-4">
+                                    <div class="col-md-6">
+                                        <div class="card border-success">
+                                            <div class="card-header bg-success text-white">
+                                                <i class="bi bi-download me-2"></i>Crear Respaldo
+                                            </div>
+                                            <div class="card-body">
+                                                <p class="card-text">Crea un respaldo de todos los oficios de un año específico.</p>
+                                                <form method="POST">
+                                                    <input type="hidden" name="current_section" value="mantenimiento">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Año a respaldar:</label>
+                                                        <select class="form-select" name="backup_year" required>
+                                                            <option value="">Seleccione un año</option>
+                                                            {% for year in available_years %}
+                                                            <option value="{{ year }}">{{ year }}</option>
+                                                            {% endfor %}
+                                                        </select>
+                                                    </div>
+                                                    <button type="submit" name="backup_year" class="btn btn-success">
+                                                        <i class="bi bi-download"></i> Crear Respaldo
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="card border-primary">
+                                            <div class="card-header bg-primary text-white">
+                                                <i class="bi bi-upload me-2"></i>Restaurar Respaldo
+                                            </div>
+                                            <div class="card-body">
+                                                <p class="card-text">Restaura los oficios desde un respaldo existente.</p>
+                                                <form method="POST" onsubmit="return confirm('¿Está seguro de restaurar este respaldo? Se eliminarán los datos actuales del año seleccionado.')">
+                                                    <input type="hidden" name="current_section" value="mantenimiento">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Respaldo a restaurar:</label>
+                                                        <select class="form-select" name="restore_year" required>
+                                                            <option value="">Seleccione un respaldo</option>
+                                                            {% for backup in backup_collections %}
+                                                            <option value="{{ backup.year }}">{{ backup.year }} ({{ backup.count }} oficios)</option>
+                                                            {% endfor %}
+                                                        </select>
+                                                    </div>
+                                                    <button type="submit" name="restore_year" class="btn btn-primary">
+                                                        <i class="bi bi-upload"></i> Restaurar Respaldo
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {% if backup_collections %}
+                                <div class="mt-3">
+                                    <h6>Respaldos Disponibles:</h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>Año</th>
+                                                    <th>Cantidad de Oficios</th>
+                                                    <th>Estado</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for backup in backup_collections %}
+                                                <tr>
+                                                    <td><strong>{{ backup.year }}</strong></td>
+                                                    <td>{{ backup.count }} oficios</td>
+                                                    <td>
+                                                        <span class="badge bg-success">Disponible</span>
+                                                        <a href="{{ url_for('download_backup', year=backup.year) }}" class="btn btn-sm btn-outline-primary ms-2">
+                                                            <i class="bi bi-download"></i> Descargar
+                                                        </a>
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                            
                             <div class="mt-4">
                                 <h6>Estadísticas del Sistema</h6>
                                 <div class="row g-3">

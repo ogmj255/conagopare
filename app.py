@@ -145,13 +145,24 @@ def send_email_notification(to_email, subject, message, oficio_data=None):
     """Send email notification"""
     def send_async_email():
         try:
+            print(f"[EMAIL DEBUG] Attempting to send email to: {to_email}")
+            print(f"[EMAIL DEBUG] Subject: {subject}")
+            
             smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
             smtp_port = int(os.getenv('SMTP_PORT', '587'))
             smtp_username = os.getenv('SMTP_USERNAME', '')
             smtp_password = os.getenv('SMTP_PASSWORD', '')
             
+            print(f"[EMAIL DEBUG] SMTP Server: {smtp_server}:{smtp_port}")
+            print(f"[EMAIL DEBUG] SMTP Username: {smtp_username}")
+            print(f"[EMAIL DEBUG] SMTP Password configured: {'Yes' if smtp_password else 'No'}")
+            
             if not smtp_username or not smtp_password:
-                print("SMTP credentials not configured")
+                print("[EMAIL ERROR] SMTP credentials not configured")
+                return False
+            
+            if not to_email or '@' not in to_email:
+                print(f"[EMAIL ERROR] Invalid recipient email: {to_email}")
                 return False
             
             msg = MIMEMultipart()
@@ -182,22 +193,27 @@ def send_email_notification(to_email, subject, message, oficio_data=None):
             </html>
             """
             
+            print(f"[EMAIL DEBUG] Connecting to SMTP server...")
             msg.attach(MIMEText(body, 'html'))
             server = smtplib.SMTP(smtp_server, smtp_port)
+            print(f"[EMAIL DEBUG] Starting TLS...")
             server.starttls()
+            print(f"[EMAIL DEBUG] Logging in...")
             server.login(smtp_username, smtp_password)
+            print(f"[EMAIL DEBUG] Sending email...")
             text = msg.as_string()
             server.sendmail(smtp_username, to_email, text)
             server.quit()
             
-            print(f"Email sent successfully to {to_email}")
+            print(f"[EMAIL SUCCESS] Email sent successfully to {to_email}")
             return True
             
         except Exception as e:
             log_error('EMAIL_ERROR', str(e), None, 'send_email_notification', 'WARNING')
-            print(f"Error sending email: {e}")
+            print(f"[EMAIL ERROR] Error sending email to {to_email}: {e}")
             return False
     
+    print(f"[EMAIL DEBUG] Starting email thread for {to_email}")
     thread = threading.Thread(target=send_async_email)
     thread.daemon = True
     thread.start()
@@ -575,11 +591,8 @@ def receive():
                 if not all([fecha_enviado, numero_oficio, gad_parroquial, canton]):
                     flash('Todos los campos obligatorios deben completarse.', 'error')
                     return redirect(url_for('receive'))
-                if len(numero_oficio) > 50 or len(detalle) > 10000:
-                    flash('Número de oficio o detalle exceden longitud máxima.', 'error')
-                    return redirect(url_for('receive'))
-                if not re.match(r'^[A-Za-z0-9\-/]+$', numero_oficio):
-                    flash('Número de oficio solo puede contener letras, números, guiones y barras.', 'error')
+                if len(detalle) > 10000:
+                    flash('Detalle excede longitud máxima.', 'error')
                     return redirect(url_for('receive'))
 
                 year = datetime.strptime(request.form['fecha_enviado'], '%Y-%m-%d').year
@@ -623,6 +636,7 @@ def receive():
                     reordenar_ids_secuenciales(year)
                     designers = users.find({'role': {'$in': ['designer', 'admin']}})
                     for designer in designers:
+                        print(f"[EMAIL DEBUG] Processing designer: {designer['username']}, email: {designer.get('email', 'NO EMAIL')}")
                         notifications.insert_one({
                             'user': designer['username'],
                             'message': f'📋 Nuevo oficio de {gad_parroquial} ({canton}) requiere designación',
@@ -634,6 +648,7 @@ def receive():
                             'read': False
                         })
                         if designer.get('email'):
+                            print(f"[EMAIL DEBUG] Sending email to designer {designer['username']} at {designer['email']}")
                             send_email_notification(
                                 designer['email'],
                                 f'Nuevo Oficio Requiere Designación - {id_secuencial}',
@@ -646,6 +661,8 @@ def receive():
                                     'detalle': detalle
                                 }
                             )
+                        else:
+                            print(f"[EMAIL DEBUG] No email configured for designer {designer['username']}")
                     flash('Oficio registrado exitosamente.', 'success')
                 except PyMongoError as e:
                     flash(f'Error de base de datos al registrar oficio: {str(e)}', 'error')
@@ -666,11 +683,8 @@ def receive():
                 if not all([oficio_id, fecha_enviado, numero_oficio, gad_parroquial, canton]):
                     flash('Todos los campos obligatorios deben completarse.', 'error')
                     return redirect(url_for('receive'))
-                if len(numero_oficio) > 50 or len(detalle) > 10000:
-                    flash('Número de oficio o detalle exceden longitud máxima.', 'error')
-                    return redirect(url_for('receive'))
-                if not re.match(r'^[A-Za-z0-9\-/]+$', numero_oficio):
-                    flash('Número de oficio solo puede contener letras, números, guiones y barras.', 'error')
+                if len(detalle) > 10000:
+                    flash('Detalle excede longitud máxima.', 'error')
                     return redirect(url_for('receive'))
 
                 update_data = {
@@ -1019,6 +1033,7 @@ def design():
                             'read': False
                         })
                         if user_data and user_data.get('email'):
+                            print(f"[EMAIL DEBUG] Sending assignment email to {assignment['tecnico']} at {user_data['email']}")
                             send_email_notification(
                                 user_data['email'],
                                 f'Nueva Asignación de {assignment["tipo_asesoria"]} - {oficio_id_secuencial}',
@@ -1031,6 +1046,8 @@ def design():
                                     'detalle': oficio_data.get('detalle', '')
                                 }
                             )
+                        else:
+                            print(f"[EMAIL DEBUG] No email configured for user {assignment['tecnico']}")
                     flash('Técnico asignado exitosamente.', 'success')
                 except PyMongoError as e:
                     flash(f'Error de base de datos al asignar técnico: {str(e)}', 'danger')
@@ -1372,8 +1389,10 @@ def tecnico():
                         # Enviar notificaciones a receive
                         designers = users.find({'role': 'designer'})
                         for designer in designers:
+                            print(f"[EMAIL DEBUG] Processing designer notification: {designer['username']}, email: {designer.get('email', 'NO EMAIL')}")
                             if designer.get('email'):
                                 if 'entregar' in request.form and request.form.get('entregar') == '1':
+                                    print(f"[EMAIL DEBUG] Sending delivery notification to {designer['username']}")
                                     send_email_notification(
                                         designer['email'],
                                         f'Oficio Entregado por Técnico - {oficio_data.get("id_secuencial", "")}',
@@ -1389,6 +1408,7 @@ def tecnico():
                                     )
                                 else:
                                     # Notificación de actualización
+                                    print(f"[EMAIL DEBUG] Sending update notification to {designer['username']}")
                                     send_email_notification(
                                         designer['email'],
                                         f'Actualización de Técnico - {oficio_data.get("id_secuencial", "")}',
@@ -1401,6 +1421,8 @@ def tecnico():
                                             'detalle': f'Técnico: {user_name} | Estado: {sub_estado} | Desarrollo: {desarrollo_actividad[:100]}...'
                                         }
                                     )
+                            else:
+                                print(f"[EMAIL DEBUG] No email configured for designer {designer['username']}")
                         
                         if 'entregar' in request.form and request.form.get('entregar') == '1':
                             flash('Entregado correctamente', 'success')
@@ -1853,6 +1875,50 @@ def admin():
                     flash(f'Error al limpiar errores: {str(e)}', 'error')
                 return redirect(url_for('admin', current_section=current_section, current_view=current_section))
 
+            elif 'backup_year' in request.form:
+                year = request.form.get('backup_year')
+                try:
+                    if not year or not year.isdigit():
+                        flash('Año inválido', 'error')
+                        return redirect(url_for('admin', current_section=current_section))
+                    
+                    backup_collection = db_oficios[f'backup_oficios_{year}']
+                    oficios_year = list(oficios.find({'id_secuencial': {'$regex': f'^{year}-'}}))
+                    
+                    if not oficios_year:
+                        flash(f'No se encontraron oficios para el año {year}', 'warning')
+                        return redirect(url_for('admin', current_section=current_section))
+                    
+                    backup_collection.delete_many({})
+                    backup_collection.insert_many(oficios_year)
+                    
+                    flash(f'Respaldo creado exitosamente: {len(oficios_year)} oficios del año {year}', 'success')
+                except Exception as e:
+                    flash(f'Error al crear respaldo: {str(e)}', 'error')
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
+
+            elif 'restore_year' in request.form:
+                year = request.form.get('restore_year')
+                try:
+                    if not year or not year.isdigit():
+                        flash('Año inválido', 'error')
+                        return redirect(url_for('admin', current_section=current_section))
+                    
+                    backup_collection = db_oficios[f'backup_oficios_{year}']
+                    backup_data = list(backup_collection.find())
+                    
+                    if not backup_data:
+                        flash(f'No se encontró respaldo para el año {year}', 'warning')
+                        return redirect(url_for('admin', current_section=current_section))
+                    
+                    oficios.delete_many({'id_secuencial': {'$regex': f'^{year}-'}})
+                    oficios.insert_many(backup_data)
+                    
+                    flash(f'Datos restaurados exitosamente: {len(backup_data)} oficios del año {year}', 'success')
+                except Exception as e:
+                    flash(f'Error al restaurar datos: {str(e)}', 'error')
+                return redirect(url_for('admin', current_section=current_section, current_view=current_section))
+
         stats = {
             'pendientes': oficios.count_documents({'estado': 'pendiente'}),
             'designados': oficios.count_documents({'estado': 'designado'}),
@@ -1888,6 +1954,19 @@ def admin():
         errors_data = list(errors.find().sort('timestamp', -1).limit(50))
         for error in errors_data:
             error['timestamp_formatted'] = format_date_with_time(error['timestamp'])
+        
+        available_years = set()
+        for oficio in oficios.find({}, {'id_secuencial': 1}):
+            year = oficio['id_secuencial'].split('-')[0]
+            if year.isdigit():
+                available_years.add(year)
+        
+        backup_collections = []
+        for collection_name in db_oficios.list_collection_names():
+            if collection_name.startswith('backup_oficios_'):
+                year = collection_name.replace('backup_oficios_', '')
+                count = db_oficios[collection_name].count_documents({})
+                backup_collections.append({'year': year, 'count': count})
 
         return render_template('admin.html',
                                stats=stats,
@@ -1899,6 +1978,8 @@ def admin():
                                tecnicos=users_list,
                                logs=logs_data,
                                errors=errors_data,
+                               available_years=sorted(available_years, reverse=True),
+                               backup_collections=backup_collections,
                                current_section=current_section)
     except PyMongoError as e:
         flash(f'Error de base de datos: {str(e)}', 'error')
@@ -1908,6 +1989,40 @@ def admin():
         flash(f'Error inesperado: {str(e)}', 'error')
         print(f"Unexpected error in admin: {str(e)}")
         return redirect(url_for('admin', current_section=current_section, current_view=current_section))
+
+@app.route('/download_backup/<year>')
+@login_required
+def download_backup(year):
+    if current_user.role != 'admin':
+        return redirect(url_for('login'))
+    try:
+        backup_collection = db_oficios[f'backup_oficios_{year}']
+        backup_data = list(backup_collection.find())
+        
+        if not backup_data:
+            flash(f'No se encontró respaldo para el año {year}', 'error')
+            return redirect(url_for('admin', current_section='mantenimiento'))
+        
+        for item in backup_data:
+            item['_id'] = str(item['_id'])
+            for assignment in item.get('assignments', []):
+                if 'anexo_id' in assignment:
+                    assignment['anexo_id'] = str(assignment['anexo_id'])
+                if 'archivo_id' in assignment:
+                    assignment['archivo_id'] = str(assignment['archivo_id'])
+            if 'archivo_id' in item:
+                item['archivo_id'] = str(item['archivo_id'])
+        
+        json_data = json.dumps(backup_data, indent=2, ensure_ascii=False)
+        
+        response = make_response(json_data)
+        response.headers['Content-Type'] = 'application/json'
+        response.headers['Content-Disposition'] = f'attachment; filename="backup_oficios_{year}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json"'
+        return response
+        
+    except Exception as e:
+        flash(f'Error al descargar respaldo: {str(e)}', 'error')
+        return redirect(url_for('admin', current_section='mantenimiento'))
 
 @app.route('/preview/<oficio_id>')
 @login_required
@@ -2331,7 +2446,9 @@ def coordinacion():
                         if 'entregar' in request.form and request.form.get('entregar') == '1':
                             designers = users.find({'role': 'designer'})
                             for designer in designers:
+                                print(f"[EMAIL DEBUG] Processing coordinator notification: {designer['username']}, email: {designer.get('email', 'NO EMAIL')}")
                                 if designer.get('email'):
+                                    print(f"[EMAIL DEBUG] Sending coordinator delivery notification to {designer['username']}")
                                     send_email_notification(
                                         designer['email'],
                                         f'Oficio Entregado por Coordinación - {oficio_data.get("id_secuencial", "")}',
@@ -2344,6 +2461,8 @@ def coordinacion():
                                             'detalle': f'Coordinador: {user_name} | Estado: {sub_estado}'
                                         }
                                     )
+                                else:
+                                    print(f"[EMAIL DEBUG] No email configured for designer {designer['username']}")
                         
                         if 'entregar' in request.form and request.form.get('entregar') == '1':
                             flash('Entregado correctamente', 'success')

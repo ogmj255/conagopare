@@ -635,8 +635,10 @@ def receive():
                     oficios.insert_one(oficio_data)
                     reordenar_ids_secuenciales(year)
                     designers = users.find({'role': {'$in': ['designer', 'admin']}})
-                    for designer in designers:
-                        print(f"[EMAIL DEBUG] Processing designer: {designer['username']}, email: {designer.get('email', 'NO EMAIL')}")
+                    designers_list = list(designers)
+                    print(f"[EMAIL DEBUG] Found {len(designers_list)} designers/admins")
+                    for designer in designers_list:
+                        print(f"[EMAIL DEBUG] Processing designer: {designer['username']}, email: {designer.get('email', 'NO EMAIL')}, role: {designer.get('role', 'NO ROLE')}")
                         notifications.insert_one({
                             'user': designer['username'],
                             'message': f'📋 Nuevo oficio de {gad_parroquial} ({canton}) requiere designación',
@@ -649,6 +651,7 @@ def receive():
                         })
                         if designer.get('email'):
                             print(f"[EMAIL DEBUG] Sending email to designer {designer['username']} at {designer['email']}")
+                            print(f"[EMAIL DEBUG] SMTP Config - Server: {os.getenv('SMTP_SERVER')}, Port: {os.getenv('SMTP_PORT')}, User: {os.getenv('SMTP_USERNAME')}")
                             send_email_notification(
                                 designer['email'],
                                 f'Nuevo Oficio Requiere Designación - {id_secuencial}',
@@ -663,6 +666,7 @@ def receive():
                             )
                         else:
                             print(f"[EMAIL DEBUG] No email configured for designer {designer['username']}")
+                    print(f"[EMAIL DEBUG] Email sending process completed")
                     flash('Oficio registrado exitosamente.', 'success')
                 except PyMongoError as e:
                     flash(f'Error de base de datos al registrar oficio: {str(e)}', 'error')

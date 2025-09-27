@@ -226,10 +226,8 @@ def send_email_notification(to_email, subject, message, oficio_data=None):
             print(f"[EMAIL ERROR] Error sending email to {to_email}: {e}")
             return False
     
-    print(f"[EMAIL DEBUG] Starting email thread for {to_email}")
-    thread = threading.Thread(target=send_async_email)
-    thread.daemon = True
-    thread.start()
+    print(f"[EMAIL DEBUG] Sending email synchronously to {to_email}")
+    return send_async_email()
 
 def get_tipos_asesoria():
     return [t['nombre'] for t in tipos_asesoria_coll.find()] or ['Asesoría Técnica', 'Inspección', 'Consultoría']
@@ -675,8 +673,9 @@ def receive():
                                 print(f"[EMAIL DEBUG] Error inserting notification: {str(notif_error)}")
                             
                             if designer.get('email'):
-                                print(f"[EMAIL DEBUG] Sending email to designer {designer['username']} at {designer['email']}")
-                                print(f"[EMAIL DEBUG] SMTP Config - Server: {os.getenv('SMTP_SERVER')}, Port: {os.getenv('SMTP_PORT')}, User: {os.getenv('SMTP_USERNAME')}")
+                                print(f"[EMAIL DEBUG] *** SENDING EMAIL TO DESIGNER ***")
+                                print(f"[EMAIL DEBUG] Designer: {designer['username']}")
+                                print(f"[EMAIL DEBUG] Email: {designer['email']}")
                                 try:
                                     send_email_notification(
                                         designer['email'],
@@ -690,12 +689,12 @@ def receive():
                                             'detalle': detalle
                                         }
                                     )
-                                    print(f"[EMAIL DEBUG] Email function called for {designer['username']}")
+                                    print(f"[EMAIL DEBUG] *** EMAIL SENT TO {designer['username']} ***")
                                 except Exception as email_error:
-                                    print(f"[EMAIL DEBUG] Error calling email function: {str(email_error)}")
+                                    print(f"[EMAIL ERROR] *** EMAIL FAILED: {str(email_error)} ***")
                             else:
-                                print(f"[EMAIL DEBUG] No email configured for designer {designer['username']}")
-                        
+                                print(f"[EMAIL DEBUG] *** NO EMAIL FOR {designer['username']} ***")
+
                         print(f"[EMAIL DEBUG] Email sending process completed")
                     except Exception as email_process_error:
                         print(f"[EMAIL DEBUG] Error in email process: {str(email_process_error)}")

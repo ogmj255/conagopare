@@ -14,9 +14,8 @@ from io import BytesIO
 from gridfs import GridFS
 from html import escape
 import json
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 import threading
 
 app = Flask(__name__)
@@ -155,7 +154,7 @@ def log_error(error_type, details, username=None, endpoint=None, level='ERROR'):
         print(f"Error logging error: {e}")
 
 def send_email_notification(to_email, subject, message, oficio_data=None):
-    """Send email notification using SMTP"""
+    """Send email notification using SendGrid Web API"""
     def send_async_email():
         try:
             print(f"[EMAIL] Sending to: {to_email}")
@@ -164,26 +163,7 @@ def send_email_notification(to_email, subject, message, oficio_data=None):
                 print(f"[EMAIL ERROR] Invalid email: {to_email}")
                 return False
             
-            # Try SendGrid SMTP first, then Gmail
-            smtp_configs = [
-                {
-                    'name': 'SendGrid',
-                    'server': 'smtp.sendgrid.net',
-                    'port': 587,
-                    'username': 'apikey',
-                    'password': os.getenv('SMTP_PASSWORD', ''),
-                    'from_email': 'ticsconagopare@gmail.com'  # Verified in SendGrid
-                },
-                {
-                    'name': 'Gmail',
-                    'server': 'smtp.gmail.com',
-                    'port': 587,
-                    'username': os.getenv('GMAIL_SMTP_USERNAME', ''),
-                    'password': os.getenv('GMAIL_SMTP_PASSWORD', ''),
-                    'from_email': os.getenv('GMAIL_SMTP_USERNAME', '')
-                }
-            ]
-            
+            # Construir cuerpo HTML
             html_body = f"""
             <html>
             <body>
@@ -205,40 +185,27 @@ def send_email_notification(to_email, subject, message, oficio_data=None):
             </html>
             """
             
-            for config in smtp_configs:
-                if not config['username'] or not config['password']:
-                    continue
-                    
-                try:
-                    print(f"[EMAIL] Trying {config['name']}...")
-                    
-                    msg = MIMEMultipart()
-                    msg['From'] = config['from_email']
-                    msg['To'] = to_email
-                    msg['Subject'] = subject
-                    msg.attach(MIMEText(html_body, 'html'))
-                    
-                    server = smtplib.SMTP(config['server'], config['port'])
-                    server.starttls()
-                    server.login(config['username'], config['password'])
-                    server.sendmail(config['from_email'], to_email, msg.as_string())
-                    server.quit()
-                    
-                    print(f"[EMAIL SUCCESS] Sent via {config['name']}")
-                    return True
-                    
-                except Exception as e:
-                    print(f"[EMAIL ERROR] {config['name']} failed: {e}")
-                    continue
+            # Crear mensaje
+            mail = Mail(
+                from_email=os.getenv('FROM_EMAIL', 'ticsconagopare@gmail.com'),
+                to_emails=to_email,
+                subject=subject,
+                html_content=html_body
+            )
             
-            print(f"[EMAIL ERROR] All SMTP methods failed")
-            return False
+            # Cliente SendGrid
+            sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
+            response = sg.send(mail)
+            
+            print(f"[EMAIL SUCCESS] Status: {response.status_code}")
+            return True
             
         except Exception as e:
+            print(f"[EMAIL ERROR] {e}")
             log_error('EMAIL_ERROR', str(e), None, 'send_email_notification', 'WARNING')
-            print(f"[EMAIL ERROR] Error sending email to {to_email}: {e}")
             return False
     
+    # Hilo asíncrono para no bloquear la app
     print(f"[EMAIL DEBUG] Starting email thread for {to_email}")
     thread = threading.Thread(target=send_async_email)
     thread.daemon = True

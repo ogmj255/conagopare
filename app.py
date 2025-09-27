@@ -142,71 +142,113 @@ def log_error(error_type, details, username=None, endpoint=None, level='ERROR'):
         print(f"Error logging error: {e}")
 
 def send_email_notification(to_email, subject, message, oficio_data=None):
-    """Send email notification"""
+    """Send email notification using Resend"""
     def send_async_email():
         try:
             print(f"[EMAIL DEBUG] Attempting to send email to: {to_email}")
             print(f"[EMAIL DEBUG] Subject: {subject}")
             
-            smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
-            smtp_port = int(os.getenv('SMTP_PORT', '587'))
-            smtp_username = os.getenv('SMTP_USERNAME', '')
-            smtp_password = os.getenv('SMTP_PASSWORD', '')
+            # Check if Resend is configured
+            resend_api_key = os.getenv('RESEND_API_KEY', '')
             
-            print(f"[EMAIL DEBUG] SMTP Server: {smtp_server}:{smtp_port}")
-            print(f"[EMAIL DEBUG] SMTP Username: {smtp_username}")
-            print(f"[EMAIL DEBUG] SMTP Password configured: {'Yes' if smtp_password else 'No'}")
-            
-            if not smtp_username or not smtp_password:
-                print("[EMAIL ERROR] SMTP credentials not configured")
-                return False
-            
-            if not to_email or '@' not in to_email:
-                print(f"[EMAIL ERROR] Invalid recipient email: {to_email}")
-                return False
-            
-            msg = MIMEMultipart()
-            msg['From'] = smtp_username
-            msg['To'] = to_email
-            msg['Subject'] = subject
-            body = f"""
-            <html>
-            <body>
-                <h2>Sistema de Gestión de Oficios - CONAGOPARE</h2>
-                <p>{message}</p>
+            if resend_api_key:
+                # Use Resend
+                import resend
+                resend.api_key = resend_api_key
                 
-                {f'''
-                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">
-                    <h4>Detalles del Oficio:</h4>
-                    <p><strong>ID:</strong> {oficio_data.get('id_secuencial', 'N/A')}</p>
-                    <p><strong>Número:</strong> {oficio_data.get('numero_oficio', 'N/A')}</p>
-                    <p><strong>Parroquia:</strong> {oficio_data.get('gad_parroquial', 'N/A')}</p>
-                    <p><strong>Cantón:</strong> {oficio_data.get('canton', 'N/A')}</p>
-                    <p><strong>Detalle:</strong> {oficio_data.get('detalle', 'N/A')}</p>
-                </div>
-                ''' if oficio_data else ''}
+                html_body = f"""
+                <html>
+                <body>
+                    <h2>Sistema de Gestión de Oficios - CONAGOPARE</h2>
+                    <p>{message}</p>
+                    
+                    {f'''
+                    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                        <h4>Detalles del Oficio:</h4>
+                        <p><strong>ID:</strong> {oficio_data.get('id_secuencial', 'N/A')}</p>
+                        <p><strong>Número:</strong> {oficio_data.get('numero_oficio', 'N/A')}</p>
+                        <p><strong>Parroquia:</strong> {oficio_data.get('gad_parroquial', 'N/A')}</p>
+                        <p><strong>Cantón:</strong> {oficio_data.get('canton', 'N/A')}</p>
+                        <p><strong>Detalle:</strong> {oficio_data.get('detalle', 'N/A')}</p>
+                    </div>
+                    ''' if oficio_data else ''}
+                    
+                    <hr>
+                    <p><small>Este es un mensaje automático del Sistema de Gestión de Oficios de CONAGOPARE.</small></p>
+                    <p><small>No responda a este correo electrónico.</small></p>
+                </body>
+                </html>
+                """
                 
-                <hr>
-                <p><small>Este es un mensaje automático del Sistema de Gestión de Oficios de CONAGOPARE.</small></p>
-                <p><small>No responda a este correo electronico.<small><p>
-            </body>
-            </html>
-            """
-            
-            print(f"[EMAIL DEBUG] Connecting to SMTP server...")
-            msg.attach(MIMEText(body, 'html'))
-            server = smtplib.SMTP(smtp_server, smtp_port)
-            print(f"[EMAIL DEBUG] Starting TLS...")
-            server.starttls()
-            print(f"[EMAIL DEBUG] Logging in...")
-            server.login(smtp_username, smtp_password)
-            print(f"[EMAIL DEBUG] Sending email...")
-            text = msg.as_string()
-            server.sendmail(smtp_username, to_email, text)
-            server.quit()
-            
-            print(f"[EMAIL SUCCESS] Email sent successfully to {to_email}")
-            return True
+                print(f"[EMAIL DEBUG] Using Resend API...")
+                
+                from_email = os.getenv('FROM_EMAIL', 'Sistema CONAGOPARE <onboarding@resend.dev>')
+                params = {
+                    "from": from_email,
+                    "to": [to_email],
+                    "subject": subject,
+                    "html": html_body,
+                }
+                
+                email = resend.Emails.send(params)
+                print(f"[EMAIL SUCCESS] Email sent successfully to {to_email} via Resend")
+                return True
+                
+            else:
+                # Fallback to SMTP
+                smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+                smtp_port = int(os.getenv('SMTP_PORT', '587'))
+                smtp_username = os.getenv('SMTP_USERNAME', '')
+                smtp_password = os.getenv('SMTP_PASSWORD', '')
+                
+                print(f"[EMAIL DEBUG] Using SMTP fallback...")
+                
+                if not smtp_username or not smtp_password:
+                    print("[EMAIL ERROR] No email service configured")
+                    return False
+                
+                if not to_email or '@' not in to_email:
+                    print(f"[EMAIL ERROR] Invalid recipient email: {to_email}")
+                    return False
+                
+                msg = MIMEMultipart()
+                msg['From'] = smtp_username
+                msg['To'] = to_email
+                msg['Subject'] = subject
+                
+                body = f"""
+                <html>
+                <body>
+                    <h2>Sistema de Gestión de Oficios - CONAGOPARE</h2>
+                    <p>{message}</p>
+                    
+                    {f'''
+                    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                        <h4>Detalles del Oficio:</h4>
+                        <p><strong>ID:</strong> {oficio_data.get('id_secuencial', 'N/A')}</p>
+                        <p><strong>Número:</strong> {oficio_data.get('numero_oficio', 'N/A')}</p>
+                        <p><strong>Parroquia:</strong> {oficio_data.get('gad_parroquial', 'N/A')}</p>
+                        <p><strong>Cantón:</strong> {oficio_data.get('canton', 'N/A')}</p>
+                        <p><strong>Detalle:</strong> {oficio_data.get('detalle', 'N/A')}</p>
+                    </div>
+                    ''' if oficio_data else ''}
+                    
+                    <hr>
+                    <p><small>Este es un mensaje automático del Sistema de Gestión de Oficios de CONAGOPARE.</small></p>
+                    <p><small>No responda a este correo electrónico.</small></p>
+                </body>
+                </html>
+                """
+                
+                msg.attach(MIMEText(body, 'html'))
+                server = smtplib.SMTP(smtp_server, smtp_port)
+                server.starttls()
+                server.login(smtp_username, smtp_password)
+                server.sendmail(smtp_username, to_email, msg.as_string())
+                server.quit()
+                
+                print(f"[EMAIL SUCCESS] Email sent successfully to {to_email} via SMTP")
+                return True
             
         except Exception as e:
             log_error('EMAIL_ERROR', str(e), None, 'send_email_notification', 'WARNING')

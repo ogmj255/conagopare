@@ -142,118 +142,84 @@ def log_error(error_type, details, username=None, endpoint=None, level='ERROR'):
         print(f"Error logging error: {e}")
 
 def send_email_notification(to_email, subject, message, oficio_data=None):
-    """Send email notification using SendGrid"""
+    """Send email notification using SMTP"""
     def send_async_email():
         try:
-            print(f"[EMAIL DEBUG] Attempting to send email to: {to_email}")
-            print(f"[EMAIL DEBUG] Subject: {subject}")
+            print(f"[EMAIL] Sending to: {to_email}")
             
-            # Check if SendGrid is configured
-            sendgrid_api_key = os.getenv('SENDGRID_API_KEY', '')
-            print(f"[EMAIL DEBUG] SendGrid API Key configured: {'Yes' if sendgrid_api_key else 'No'}")
+            if not to_email or '@' not in to_email:
+                print(f"[EMAIL ERROR] Invalid email: {to_email}")
+                return False
             
-            if sendgrid_api_key:
-                # Use SendGrid
-                import sendgrid
-                from sendgrid.helpers.mail import Mail
-                
-                html_body = f"""
-                <html>
-                <body>
-                    <h2>Sistema de Gestión de Oficios - CONAGOPARE</h2>
-                    <p>{message}</p>
+            # Try SendGrid SMTP first, then Gmail
+            smtp_configs = [
+                {
+                    'name': 'SendGrid',
+                    'server': 'smtp.sendgrid.net',
+                    'port': 587,
+                    'username': 'apikey',
+                    'password': os.getenv('SMTP_PASSWORD', ''),
+                    'from_email': 'ticsconagopare@gmail.com'  # Verified in SendGrid
+                },
+                {
+                    'name': 'Gmail',
+                    'server': 'smtp.gmail.com',
+                    'port': 587,
+                    'username': os.getenv('GMAIL_SMTP_USERNAME', ''),
+                    'password': os.getenv('GMAIL_SMTP_PASSWORD', ''),
+                    'from_email': os.getenv('GMAIL_SMTP_USERNAME', '')
+                }
+            ]
+            
+            html_body = f"""
+            <html>
+            <body>
+                <h2>Sistema de Gestión de Oficios - CONAGOPARE</h2>
+                <p>{message}</p>
+                {f'''
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                    <h4>Detalles del Oficio:</h4>
+                    <p><strong>ID:</strong> {oficio_data.get('id_secuencial', 'N/A')}</p>
+                    <p><strong>Número:</strong> {oficio_data.get('numero_oficio', 'N/A')}</p>
+                    <p><strong>Parroquia:</strong> {oficio_data.get('gad_parroquial', 'N/A')}</p>
+                    <p><strong>Cantón:</strong> {oficio_data.get('canton', 'N/A')}</p>
+                    <p><strong>Detalle:</strong> {oficio_data.get('detalle', 'N/A')}</p>
+                </div>
+                ''' if oficio_data else ''}
+                <hr>
+                <p><small>Sistema automático CONAGOPARE - No responder</small></p>
+            </body>
+            </html>
+            """
+            
+            for config in smtp_configs:
+                if not config['username'] or not config['password']:
+                    continue
                     
-                    {f'''
-                    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">
-                        <h4>Detalles del Oficio:</h4>
-                        <p><strong>ID:</strong> {oficio_data.get('id_secuencial', 'N/A')}</p>
-                        <p><strong>Número:</strong> {oficio_data.get('numero_oficio', 'N/A')}</p>
-                        <p><strong>Parroquia:</strong> {oficio_data.get('gad_parroquial', 'N/A')}</p>
-                        <p><strong>Cantón:</strong> {oficio_data.get('canton', 'N/A')}</p>
-                        <p><strong>Detalle:</strong> {oficio_data.get('detalle', 'N/A')}</p>
-                    </div>
-                    ''' if oficio_data else ''}
+                try:
+                    print(f"[EMAIL] Trying {config['name']}...")
                     
-                    <hr>
-                    <p><small>Este es un mensaje automático del Sistema de Gestión de Oficios de CONAGOPARE.</small></p>
-                    <p><small>No responda a este correo electrónico.</small></p>
-                </body>
-                </html>
-                """
-                
-                print(f"[EMAIL DEBUG] Using SendGrid API...")
-                
-                from_email = 'noreply@conagopare.com'
-                
-                message = Mail(
-                    from_email=from_email,
-                    to_emails=to_email,
-                    subject=subject,
-                    html_content=html_body
-                )
-                
-                sg = sendgrid.SendGridAPIClient(api_key=sendgrid_api_key)
-                response = sg.send(message)
-                
-                print(f"[EMAIL DEBUG] SendGrid response status: {response.status_code}")
-                print(f"[EMAIL SUCCESS] Email sent successfully to {to_email} via SendGrid")
-                return True
-                
-            else:
-                # Fallback to SMTP
-                smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
-                smtp_port = int(os.getenv('SMTP_PORT', '587'))
-                smtp_username = os.getenv('SMTP_USERNAME', '')
-                smtp_password = os.getenv('SMTP_PASSWORD', '')
-                
-                print(f"[EMAIL DEBUG] Using SMTP fallback...")
-                
-                if not smtp_username or not smtp_password:
-                    print("[EMAIL ERROR] No email service configured")
-                    return False
-                
-                if not to_email or '@' not in to_email:
-                    print(f"[EMAIL ERROR] Invalid recipient email: {to_email}")
-                    return False
-                
-                msg = MIMEMultipart()
-                msg['From'] = smtp_username
-                msg['To'] = to_email
-                msg['Subject'] = subject
-                
-                body = f"""
-                <html>
-                <body>
-                    <h2>Sistema de Gestión de Oficios - CONAGOPARE</h2>
-                    <p>{message}</p>
+                    msg = MIMEMultipart()
+                    msg['From'] = config['from_email']
+                    msg['To'] = to_email
+                    msg['Subject'] = subject
+                    msg.attach(MIMEText(html_body, 'html'))
                     
-                    {f'''
-                    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">
-                        <h4>Detalles del Oficio:</h4>
-                        <p><strong>ID:</strong> {oficio_data.get('id_secuencial', 'N/A')}</p>
-                        <p><strong>Número:</strong> {oficio_data.get('numero_oficio', 'N/A')}</p>
-                        <p><strong>Parroquia:</strong> {oficio_data.get('gad_parroquial', 'N/A')}</p>
-                        <p><strong>Cantón:</strong> {oficio_data.get('canton', 'N/A')}</p>
-                        <p><strong>Detalle:</strong> {oficio_data.get('detalle', 'N/A')}</p>
-                    </div>
-                    ''' if oficio_data else ''}
+                    server = smtplib.SMTP(config['server'], config['port'])
+                    server.starttls()
+                    server.login(config['username'], config['password'])
+                    server.sendmail(config['from_email'], to_email, msg.as_string())
+                    server.quit()
                     
-                    <hr>
-                    <p><small>Este es un mensaje automático del Sistema de Gestión de Oficios de CONAGOPARE.</small></p>
-                    <p><small>No responda a este correo electrónico.</small></p>
-                </body>
-                </html>
-                """
-                
-                msg.attach(MIMEText(body, 'html'))
-                server = smtplib.SMTP(smtp_server, smtp_port)
-                server.starttls()
-                server.login(smtp_username, smtp_password)
-                server.sendmail(smtp_username, to_email, msg.as_string())
-                server.quit()
-                
-                print(f"[EMAIL SUCCESS] Email sent successfully to {to_email} via SMTP")
-                return True
+                    print(f"[EMAIL SUCCESS] Sent via {config['name']}")
+                    return True
+                    
+                except Exception as e:
+                    print(f"[EMAIL ERROR] {config['name']} failed: {e}")
+                    continue
+            
+            print(f"[EMAIL ERROR] All SMTP methods failed")
+            return False
             
         except Exception as e:
             log_error('EMAIL_ERROR', str(e), None, 'send_email_notification', 'WARNING')
